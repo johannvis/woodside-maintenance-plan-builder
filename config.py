@@ -3,12 +3,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///woodside_maintenance.db")
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///maintenance.db")
 
 DEFAULT_DATASET_PATH = "Data/LNG_Train_FLOC_FMECA_Synthetic_plus.xlsx"
 DEFAULT_RULES_PATH = "db/seed/default_rules.json"
 
-APP_TITLE = "Woodside Maintenance Plan Builder"
+APP_TITLE = "Maintenance Plan Builder"
 APP_ICON = "⚙️"
 
 # Packaging defaults

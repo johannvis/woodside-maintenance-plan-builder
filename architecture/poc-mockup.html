@@ -1,0 +1,1234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Maintenance Plan Builder — POC</title>
+<style>
+  :root {
+    --accent:    #A100FF;
+    --accent-lt: #f3e6ff;
+    --accent-dk: #7a00c2;
+    --green:     #1ab394;
+    --green-lt:  #e6f9f5;
+    --amber:     #f5a623;
+    --amber-lt:  #fff8ec;
+    --red:       #e74c3c;
+    --blue:      #2196F3;
+    --blue-lt:   #e3f2fd;
+    --bg:        #f4f5f7;
+    --surface:   #ffffff;
+    --border:    #e0e0e0;
+    --text:      #1a1a2e;
+    --muted:     #6b7280;
+    --nav-h:     56px;
+    --sidebar-w: 260px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+  }
+
+  /* ── TOP NAV ── */
+  .topnav {
+    height: var(--nav-h);
+    background: var(--text);
+    display: flex;
+    align-items: center;
+    padding: 0 24px;
+    gap: 12px;
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    box-shadow: 0 2px 8px rgba(0,0,0,.3);
+  }
+  .topnav .logo {
+    color: var(--accent);
+    font-weight: 800;
+    font-size: 18px;
+    letter-spacing: -0.5px;
+    margin-right: 8px;
+  }
+  .topnav .app-title {
+    color: #fff;
+    font-size: 15px;
+    font-weight: 500;
+  }
+  .topnav .sep { flex: 1; }
+  .topnav .badge {
+    background: var(--accent);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 4px;
+    letter-spacing: .5px;
+  }
+  .topnav .user-chip {
+    background: #2d2d44;
+    color: #ccc;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+  }
+
+  /* ── TAB BAR ── */
+  .tabbar {
+    position: fixed;
+    top: var(--nav-h);
+    left: 0; right: 0;
+    background: var(--surface);
+    border-bottom: 2px solid var(--border);
+    display: flex;
+    align-items: stretch;
+    z-index: 90;
+    padding: 0 24px;
+  }
+  .tabbar .tab {
+    padding: 0 20px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    color: var(--muted);
+    font-weight: 500;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    transition: all .15s;
+    user-select: none;
+    white-space: nowrap;
+  }
+  .tabbar .tab:hover { color: var(--accent); }
+  .tabbar .tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  .tabbar .tab .step-num {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: var(--bg);
+    border: 1.5px solid currentColor;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .tabbar .tab.active .step-num,
+  .tabbar .tab.done .step-num {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .tabbar .tab.done { color: var(--accent); opacity: .6; }
+  .tabbar .tab-arrow { color: var(--border); padding: 0 4px; line-height: 44px; }
+
+  /* ── MAIN LAYOUT ── */
+  .main {
+    margin-top: calc(var(--nav-h) + 44px);
+    padding: 24px;
+    min-height: calc(100vh - var(--nav-h) - 44px);
+  }
+
+  /* ── PAGES ── */
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* ── CARDS ── */
+  .card {
+    background: var(--surface);
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    padding: 20px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.05);
+  }
+  .card-title {
+    font-weight: 700;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: .6px;
+    color: var(--muted);
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card-title .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+
+  /* ── GRID HELPERS ── */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; }
+  .gap { gap: 16px; }
+
+  /* ── STAT CHIPS ── */
+  .stat-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+  .stat {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 120px;
+  }
+  .stat .val {
+    font-size: 26px;
+    font-weight: 800;
+    color: var(--accent);
+    line-height: 1;
+  }
+  .stat .lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+
+  /* ── UPLOAD ZONE ── */
+  .upload-zone {
+    border: 2px dashed var(--accent);
+    border-radius: 10px;
+    padding: 32px;
+    text-align: center;
+    background: var(--accent-lt);
+    margin-bottom: 20px;
+    cursor: pointer;
+  }
+  .upload-zone .icon { font-size: 36px; margin-bottom: 8px; }
+  .upload-zone .title { font-weight: 700; font-size: 15px; color: var(--accent); }
+  .upload-zone .sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .upload-zone .filename {
+    margin-top: 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--accent);
+    color: #fff;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  /* ── TREE VIEW ── */
+  .tree { font-size: 13px; line-height: 1.8; }
+  .tree .node { padding-left: 16px; position: relative; }
+  .tree .node::before {
+    content: '';
+    position: absolute;
+    left: 6px; top: 0; bottom: 0;
+    border-left: 1.5px solid var(--border);
+  }
+  .tree .node:last-child::before { height: 13px; }
+  .tree .node-row {
+    display: flex; align-items: center; gap: 6px;
+    padding: 2px 4px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .tree .node-row:hover { background: var(--accent-lt); }
+  .tree .node-row.selected { background: var(--accent-lt); color: var(--accent); font-weight: 600; }
+  .tree .caret { color: var(--muted); font-size: 10px; width: 12px; }
+  .tree .icon { font-size: 14px; }
+  .tree .count {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--muted);
+    background: var(--bg);
+    padding: 1px 6px;
+    border-radius: 10px;
+  }
+
+  /* ── TABLE ── */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th {
+    background: var(--bg);
+    padding: 9px 12px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+    color: var(--muted);
+    border-bottom: 2px solid var(--border);
+    white-space: nowrap;
+  }
+  tbody tr { border-bottom: 1px solid var(--border); }
+  tbody tr:hover { background: var(--bg); }
+  tbody td { padding: 8px 12px; vertical-align: middle; }
+  .table-scroll { overflow-x: auto; }
+
+  /* ── TAGS / PILLS ── */
+  .pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .pill-purple  { background: var(--accent-lt); color: var(--accent); }
+  .pill-green   { background: var(--green-lt);  color: var(--green); }
+  .pill-amber   { background: var(--amber-lt);  color: var(--amber); }
+  .pill-red     { background: #fde8e8;           color: var(--red); }
+  .pill-blue    { background: var(--blue-lt);    color: var(--blue); }
+  .pill-gray    { background: #f0f0f0;            color: #555; }
+
+  /* ── BUTTONS ── */
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all .15s;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-dk); }
+  .btn-outline {
+    background: #fff;
+    border: 1.5px solid var(--border);
+    color: var(--text);
+  }
+  .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-ghost { background: transparent; color: var(--muted); }
+  .btn-ghost:hover { color: var(--accent); background: var(--accent-lt); }
+  .btn-green { background: var(--green); color: #fff; }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+  /* ── RULE CARD ── */
+  .rule-card {
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 12px;
+    overflow: hidden;
+  }
+  .rule-header {
+    background: var(--bg);
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+  }
+  .rule-num {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .rule-name { font-weight: 600; font-size: 13px; flex: 1; }
+  .rule-desc { font-size: 12px; color: var(--muted); }
+  .rule-body {
+    padding: 14px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+  }
+  .rule-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 13px; }
+  .rule-row:last-child { margin-bottom: 0; }
+  .rule-label { color: var(--muted); width: 120px; flex-shrink: 0; font-size: 12px; }
+  .rule-select {
+    border: 1.5px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-size: 13px;
+    background: var(--bg);
+    color: var(--text);
+    cursor: pointer;
+    outline: none;
+    appearance: none;
+    padding-right: 24px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236b7280'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+  }
+  .rule-plus { color: var(--muted); font-size: 16px; }
+  .rule-input {
+    border: 1.5px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-size: 13px;
+    width: 60px;
+    text-align: center;
+  }
+
+  /* ── PLAN TREE (page 3) ── */
+  .plan-layout { display: grid; grid-template-columns: 280px 1fr; gap: 16px; }
+  .plan-tree-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .plan-tree-header {
+    padding: 12px 14px;
+    background: var(--text);
+    color: #fff;
+    font-weight: 600;
+    font-size: 13px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .plan-tree-body { padding: 8px; overflow-y: auto; max-height: 520px; }
+  .plan-node { border-radius: 6px; overflow: hidden; margin-bottom: 4px; }
+  .plan-node-row {
+    padding: 7px 10px;
+    cursor: pointer;
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px;
+    border-radius: 6px;
+  }
+  .plan-node-row:hover { background: var(--bg); }
+  .plan-node-row.selected { background: var(--accent-lt); color: var(--accent); font-weight: 600; }
+  .plan-node-row .pn-icon { font-size: 14px; flex-shrink: 0; }
+  .plan-node-row .pn-label { flex: 1; }
+  .plan-node-row .pn-count { font-size: 11px; color: var(--muted); background: var(--bg); padding: 1px 5px; border-radius: 8px; }
+  .plan-children { padding-left: 18px; border-left: 1.5px solid var(--border); margin-left: 16px; }
+
+  /* ── DETAIL PANEL ── */
+  .detail-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .detail-header {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 12px;
+  }
+  .detail-header .title { font-weight: 700; font-size: 15px; }
+  .detail-header .sub { font-size: 12px; color: var(--muted); }
+  .detail-body { padding: 16px; flex: 1; overflow-y: auto; }
+  .op-row {
+    display: grid;
+    grid-template-columns: 40px 1fr 60px 80px 30px;
+    align-items: center;
+    padding: 8px 10px;
+    border-radius: 6px;
+    gap: 10px;
+    margin-bottom: 4px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    font-size: 13px;
+  }
+  .op-row:hover { border-color: var(--accent); background: var(--accent-lt); }
+  .op-num { font-weight: 700; color: var(--muted); }
+  .op-drag { color: var(--border); cursor: grab; font-size: 16px; text-align: center; }
+  .op-drag:hover { color: var(--accent); }
+  .hours-bar { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+  .bar-track {
+    flex: 1; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden;
+  }
+  .bar-fill { height: 100%; border-radius: 4px; background: var(--green); }
+  .bar-fill.warn { background: var(--amber); }
+  .bar-fill.over { background: var(--red); }
+  .hours-label { font-size: 12px; font-weight: 600; }
+
+  /* ── EXPORT PAGE ── */
+  .export-option {
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    transition: all .15s;
+    margin-bottom: 10px;
+  }
+  .export-option:hover { border-color: var(--accent); background: var(--accent-lt); }
+  .export-option.selected { border-color: var(--accent); background: var(--accent-lt); }
+  .export-radio {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .export-option.selected .export-radio {
+    border-color: var(--accent);
+    background: var(--accent);
+  }
+  .export-option.selected .export-radio::after {
+    content: '';
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #fff;
+  }
+  .export-title { font-weight: 700; font-size: 13px; }
+  .export-desc { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .export-ext {
+    margin-top: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: var(--bg);
+    color: var(--muted);
+    display: inline-block;
+  }
+  .checkbox-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 13px; }
+  .checkbox-row input[type=checkbox] { accent-color: var(--accent); width: 15px; height: 15px; }
+
+  /* ── SUMMARY BAR ── */
+  .summary-bar {
+    background: var(--text);
+    color: #fff;
+    border-radius: 8px;
+    padding: 12px 18px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    font-size: 13px;
+    margin-bottom: 20px;
+  }
+  .summary-bar .s-item { display: flex; flex-direction: column; gap: 1px; }
+  .summary-bar .s-val { font-size: 20px; font-weight: 800; color: var(--accent); }
+  .summary-bar .s-lbl { font-size: 10px; color: #9ca3af; text-transform: uppercase; letter-spacing: .5px; }
+  .summary-bar .s-sep { width: 1px; height: 32px; background: #374151; }
+
+  /* ── ALERTS ── */
+  .alert {
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .alert-green { background: var(--green-lt); color: var(--green); border: 1px solid #a3e4d7; }
+  .alert-amber { background: var(--amber-lt); color: #b7770d; border: 1px solid #f9d28a; }
+
+  /* ── SECTION TITLE ── */
+  .section-title {
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .section-title .line { flex: 1; height: 1px; background: var(--border); }
+
+  /* ── MISC ── */
+  .flex { display: flex; }
+  .flex-col { display: flex; flex-direction: column; }
+  .items-center { align-items: center; }
+  .justify-between { justify-content: space-between; }
+  .gap-8 { gap: 8px; }
+  .gap-12 { gap: 12px; }
+  .gap-16 { gap: 16px; }
+  .mb-8 { margin-bottom: 8px; }
+  .mb-12 { margin-bottom: 12px; }
+  .mb-16 { margin-bottom: 16px; }
+  .mb-20 { margin-bottom: 20px; }
+  .text-muted { color: var(--muted); }
+  .text-sm { font-size: 12px; }
+  .font-bold { font-weight: 700; }
+  .divider { height: 1px; background: var(--border); margin: 16px 0; }
+
+  /* ── PROGRESS STEPS ── */
+  .progress-strip {
+    display: flex;
+    align-items: center;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 20px;
+    margin-bottom: 20px;
+    gap: 8px;
+  }
+  .ps-step { display: flex; align-items: center; gap: 8px; }
+  .ps-dot {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; color: var(--muted);
+  }
+  .ps-dot.done { background: var(--green); border-color: var(--green); color: #fff; }
+  .ps-dot.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .ps-label { font-size: 12px; font-weight: 600; color: var(--muted); }
+  .ps-label.active { color: var(--accent); }
+  .ps-label.done { color: var(--green); }
+  .ps-line { flex: 1; height: 2px; background: var(--border); border-radius: 1px; }
+  .ps-line.done { background: var(--green); }
+</style>
+</head>
+<body>
+
+<!-- TOP NAV -->
+<div class="topnav">
+  <div class="logo">■</div>
+  <div class="app-title">Maintenance Plan Builder</div>
+  <div class="sep"></div>
+  <div class="badge">POC</div>
+  <div class="user-chip">LNG Train 1</div>
+</div>
+
+<!-- TAB BAR -->
+<div class="tabbar">
+  <div class="tab active" onclick="showPage(0)" id="tab0">
+    <div class="step-num">1</div> Ingest &amp; Preview
+  </div>
+  <div class="tab-arrow">›</div>
+  <div class="tab" onclick="showPage(1)" id="tab1">
+    <div class="step-num">2</div> Rule Editor
+  </div>
+  <div class="tab-arrow">›</div>
+  <div class="tab" onclick="showPage(2)" id="tab2">
+    <div class="step-num">3</div> Review &amp; Refine
+  </div>
+  <div class="tab-arrow">›</div>
+  <div class="tab" onclick="showPage(3)" id="tab3">
+    <div class="step-num">4</div> Export
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<!-- PAGE 1 — INGEST & PREVIEW                               -->
+<!-- ════════════════════════════════════════════════════════ -->
+<div class="main">
+<div class="page active" id="page0">
+
+  <div class="progress-strip">
+    <div class="ps-step"><div class="ps-dot active">1</div><div class="ps-label active">Ingest</div></div>
+    <div class="ps-line"></div>
+    <div class="ps-step"><div class="ps-dot">2</div><div class="ps-label">Rules</div></div>
+    <div class="ps-line"></div>
+    <div class="ps-step"><div class="ps-dot">3</div><div class="ps-label">Build</div></div>
+    <div class="ps-line"></div>
+    <div class="ps-step"><div class="ps-dot">4</div><div class="ps-label">Export</div></div>
+  </div>
+
+  <!-- Upload zone -->
+  <div class="upload-zone" style="cursor:default">
+    <div class="icon">📂</div>
+    <div class="title">FMECA / Task List Loaded</div>
+    <div class="sub">Drag a new .xlsx here to replace, or browse</div>
+    <div class="filename">✓ LNG_Train_FLOC_FMECA_Synthetic.xlsx</div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stat-row">
+    <div class="stat"><div class="val">1,000</div><div class="lbl">Tasks</div></div>
+    <div class="stat"><div class="val">87</div><div class="lbl">Functional Locations</div></div>
+    <div class="stat"><div class="val">15</div><div class="lbl">Asset Classes</div></div>
+    <div class="stat"><div class="val">10</div><div class="lbl">Systems</div></div>
+    <div class="stat"><div class="val">2</div><div class="lbl">LNG Trains</div></div>
+  </div>
+
+  <div class="grid-2 gap mb-16">
+    <!-- Asset Hierarchy -->
+    <div class="card">
+      <div class="card-title"><div class="dot"></div>Asset Hierarchy</div>
+      <div class="tree">
+        <div class="node-row" style="font-weight:700; display:flex; align-items:center; gap:6px; padding:3px 4px;">
+          <span>🏭</span> LNG Train 1 &amp; 2
+          <span class="count" style="margin-left:auto">87 FLOCs</span>
+        </div>
+        <div class="node">
+          <div class="node-row selected"><span class="caret">▼</span><span>🔧</span> C01 — Feed Gas Compression<span class="count">22</span></div>
+          <div class="node" style="padding-left:12px">
+            <div class="node-row"><span class="caret">▶</span><span>⚙️</span> K001A Feed Gas Compressor A<span class="count">12</span></div>
+            <div class="node-row"><span class="caret">▶</span><span>⚙️</span> K001B Feed Gas Compressor B<span class="count">12</span></div>
+            <div class="node-row"><span class="caret">▶</span><span>⚙️</span> K002 Booster Compressor<span class="count">10</span></div>
+            <div class="node-row" style="color:var(--muted); font-size:12px; padding-left:16px">+19 more FLOCs…</div>
+          </div>
+          <div class="node-row"><span class="caret">▶</span><span>🧪</span> C02 — Acid Gas Removal<span class="count">16</span></div>
+          <div class="node-row"><span class="caret">▶</span><span>⚡</span> E01 — Electrical Distribution<span class="count">14</span></div>
+          <div class="node-row"><span class="caret">▶</span><span>📡</span> I01 — Instrumentation<span class="count">18</span></div>
+          <div class="node-row" style="color:var(--muted); font-size:12px; padding-left:4px">+6 more systems…</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Task Preview -->
+    <div class="card">
+      <div class="card-title"><div class="dot"></div>Task Sample — K001A Feed Gas Compressor A</div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Task Description</th>
+              <th>Type</th>
+              <th>Interval</th>
+              <th>Hrs</th>
+              <th>Shutdown</th>
+              <th>Criticality</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Vibration analysis (online trending)</td><td><span class="pill pill-blue">CBM</span></td><td>1M</td><td>1.0</td><td>No</td><td><span class="pill pill-red">High</span></td></tr>
+            <tr><td>Bearing inspection &amp; lubrication</td><td><span class="pill pill-gray">PM</span></td><td>6M</td><td>4.0</td><td>No</td><td><span class="pill pill-red">High</span></td></tr>
+            <tr><td>Lube oil analysis</td><td><span class="pill pill-purple">PdM</span></td><td>3M</td><td>1.5</td><td>No</td><td><span class="pill pill-amber">Medium</span></td></tr>
+            <tr><td>Seal inspection &amp; replacement</td><td><span class="pill pill-gray">PM</span></td><td>12M</td><td>6.0</td><td>Yes</td><td><span class="pill pill-red">High</span></td></tr>
+            <tr><td>Coupling alignment check</td><td><span class="pill pill-green">Inspection</span></td><td>6M</td><td>2.0</td><td>No</td><td><span class="pill pill-amber">Medium</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Distribution charts (text-based) -->
+  <div class="grid-3 gap mb-20">
+    <div class="card">
+      <div class="card-title"><div class="dot"></div>Task Type Distribution</div>
+      <div style="font-size:13px">
+        <div class="flex items-center gap-8 mb-8"><span class="pill pill-green" style="width:80px;text-align:center">Inspection</span> <div style="flex:1;height:8px;background:var(--bg);border-radius:4px;overflow:hidden"><div style="width:40%;height:100%;background:var(--green);border-radius:4px"></div></div> <span class="text-muted">401</span></div>
+        <div class="flex items-center gap-8 mb-8"><span class="pill pill-gray" style="width:80px;text-align:center">PM</span> <div style="flex:1;height:8px;background:var(--bg);border-radius:4px;overflow:hidden"><div style="width:36%;height:100%;background:#9ca3af;border-radius:4px"></div></div> <span class="text-muted">364</span></div>
+        <div class="flex items-center gap-8 mb-8"><span class="pill pill-purple" style="width:80px;text-align:center">PdM</span> <div style="flex:1;height:8px;background:var(--bg);border-radius:4px;overflow:hidden"><div style="width:19%;height:100%;background:var(--accent);border-radius:4px"></div></div> <span class="text-muted">188</span></div>
+        <div class="flex items-center gap-8"><span class="pill pill-blue" style="width:80px;text-align:center">CBM</span> <div style="flex:1;height:8px;background:var(--bg);border-radius:4px;overflow:hidden"><div style="width:5%;height:100%;background:var(--blue);border-radius:4px"></div></div> <span class="text-muted">47</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title"><div class="dot"></div>Planner Group Split</div>
+      <div style="font-size:13px">
+        <div class="flex items-center gap-8 mb-8"><span style="width:80px;font-size:12px;color:var(--muted)">PG-MECH</span> <div style="flex:1;height:8px;background:var(--bg);border-radius:4px;overflow:hidden"><div style="width:48%;height:100%;background:var(--accent);border-radius:4px"></div></div> <span class="text-muted">481</span></div>
+        <div class="flex items-center gap-8 mb-8"><span style="width:80px;font-size:12px;color:var(--muted)">PG-INSTR</span> <div style="flex:1;height:8px;background:var(--bg);border-radius:4px;overflow:hidden"><div style="width:26%;height:100%;background:var(--blue);border-radius:4px"></div></div> <span class="text-muted">263</span></div>
+        <div class="flex items-center gap-8 mb-8"><span style="width:80px;font-size:12px;color:var(--muted)">PG-INSP</span> <div style="flex:1;height:8px;background:var(--bg);border-radius:4px;overflow:hidden"><div style="width:15%;height:100%;background:var(--green);border-radius:4px"></div></div> <span class="text-muted">151</span></div>
+        <div class="flex items-center gap-8 mb-8"><span style="width:80px;font-size:12px;color:var(--muted)">PG-ELEC</span> <div style="flex:1;height:8px;background:var(--bg);border-radius:4px;overflow:hidden"><div style="width:10%;height:100%;background:var(--amber);border-radius:4px"></div></div> <span class="text-muted">96</span></div>
+        <div class="flex items-center gap-8"><span style="width:80px;font-size:12px;color:var(--muted)">PG-CIVIL</span> <div style="flex:1;height:8px;background:var(--bg);border-radius:4px;overflow:hidden"><div style="width:1%;height:100%;background:#ccc;border-radius:4px"></div></div> <span class="text-muted">9</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title"><div class="dot"></div>Criticality Profile</div>
+      <div style="font-size:13px">
+        <div class="flex items-center gap-8 mb-8"><span class="pill pill-red" style="width:80px;text-align:center">High</span> <div style="flex:1;height:8px;background:var(--bg);border-radius:4px;overflow:hidden"><div style="width:55%;height:100%;background:var(--red);border-radius:4px"></div></div> <span class="text-muted">548</span></div>
+        <div class="flex items-center gap-8 mb-8"><span class="pill pill-amber" style="width:80px;text-align:center">Medium</span> <div style="flex:1;height:8px;background:var(--bg);border-radius:4px;overflow:hidden"><div style="width:35%;height:100%;background:var(--amber);border-radius:4px"></div></div> <span class="text-muted">352</span></div>
+        <div class="flex items-center gap-8"><span class="pill pill-green" style="width:80px;text-align:center">Low</span> <div style="flex:1;height:8px;background:var(--bg);border-radius:4px;overflow:hidden"><div style="width:10%;height:100%;background:var(--green);border-radius:4px"></div></div> <span class="text-muted">100</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flex justify-between items-center">
+    <div class="text-muted text-sm">✓ Data validated — no missing required fields</div>
+    <button class="btn btn-primary" onclick="showPage(1)">Configure Rules &nbsp;›</button>
+  </div>
+
+</div>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<!-- PAGE 2 — RULE EDITOR                                    -->
+<!-- ════════════════════════════════════════════════════════ -->
+<div class="page" id="page1">
+
+  <div class="progress-strip">
+    <div class="ps-step"><div class="ps-dot done">✓</div><div class="ps-label done">Ingest</div></div>
+    <div class="ps-line done"></div>
+    <div class="ps-step"><div class="ps-dot active">2</div><div class="ps-label active">Rules</div></div>
+    <div class="ps-line"></div>
+    <div class="ps-step"><div class="ps-dot">3</div><div class="ps-label">Build</div></div>
+    <div class="ps-line"></div>
+    <div class="ps-step"><div class="ps-dot">4</div><div class="ps-label">Export</div></div>
+  </div>
+
+  <div class="grid-2 gap">
+    <div>
+      <div class="flex justify-between items-center mb-16">
+        <div class="section-title" style="margin-bottom:0">Rule Set <span class="pill pill-purple" style="font-size:12px">LNG Train — Standard</span></div>
+        <div class="flex gap-8">
+          <button class="btn btn-outline btn-sm">📂 Load Rule Set</button>
+          <button class="btn btn-outline btn-sm">💾 Save Rule Set</button>
+        </div>
+      </div>
+
+      <!-- Rule 1 -->
+      <div class="rule-card">
+        <div class="rule-header">
+          <div class="rule-num">1</div>
+          <div>
+            <div class="rule-name">Primary Grouping</div>
+            <div class="rule-desc">Group tasks into Maintenance Items by shared attributes</div>
+          </div>
+          <button class="btn btn-ghost btn-sm" style="margin-left:auto">✎ Edit</button>
+          <button class="btn btn-ghost btn-sm">🗑</button>
+        </div>
+        <div class="rule-body">
+          <div class="rule-row">
+            <span class="rule-label">Group by</span>
+            <select class="rule-select"><option>Planner Group</option></select>
+            <span class="rule-plus">+</span>
+            <select class="rule-select"><option>Interval</option></select>
+            <span class="rule-plus">+</span>
+            <select class="rule-select"><option>System</option></select>
+          </div>
+          <div class="rule-row">
+            <span class="rule-label">Then by</span>
+            <select class="rule-select"><option>Shutdown Required</option></select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Rule 2 -->
+      <div class="rule-card">
+        <div class="rule-header">
+          <div class="rule-num">2</div>
+          <div>
+            <div class="rule-name">Max Duration Cap</div>
+            <div class="rule-desc">Split items that exceed the hour limit</div>
+          </div>
+          <button class="btn btn-ghost btn-sm" style="margin-left:auto">✎ Edit</button>
+          <button class="btn btn-ghost btn-sm">🗑</button>
+        </div>
+        <div class="rule-body">
+          <div class="rule-row">
+            <span class="rule-label">If total hours</span>
+            <span style="color:var(--muted)">exceeds</span>
+            <input class="rule-input" type="number" value="8" />
+            <span style="color:var(--muted)">hours</span>
+          </div>
+          <div class="rule-row">
+            <span class="rule-label">Then</span>
+            <select class="rule-select"><option>Split into additional Maintenance Item</option></select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Rule 3 -->
+      <div class="rule-card">
+        <div class="rule-header">
+          <div class="rule-num">3</div>
+          <div>
+            <div class="rule-name">Shutdown Separation</div>
+            <div class="rule-desc">Keep online and shutdown tasks in separate items</div>
+          </div>
+          <button class="btn btn-ghost btn-sm" style="margin-left:auto">✎ Edit</button>
+          <button class="btn btn-ghost btn-sm">🗑</button>
+        </div>
+        <div class="rule-body">
+          <div class="rule-row">
+            <span class="rule-label">Condition</span>
+            <select class="rule-select"><option>Shutdown Required = Yes</option></select>
+          </div>
+          <div class="rule-row">
+            <span class="rule-label">Action</span>
+            <select class="rule-select"><option>Assign to separate Maintenance Item</option></select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Rule 4 -->
+      <div class="rule-card">
+        <div class="rule-header">
+          <div class="rule-num">4</div>
+          <div>
+            <div class="rule-name">Regulatory Isolation</div>
+            <div class="rule-desc">Regulatory tasks always get a dedicated item</div>
+          </div>
+          <button class="btn btn-ghost btn-sm" style="margin-left:auto">✎ Edit</button>
+          <button class="btn btn-ghost btn-sm">🗑</button>
+        </div>
+        <div class="rule-body">
+          <div class="rule-row">
+            <span class="rule-label">Condition</span>
+            <select class="rule-select"><option>Is Regulatory = Yes</option></select>
+          </div>
+          <div class="rule-row">
+            <span class="rule-label">Action</span>
+            <select class="rule-select"><option>Create dedicated Maintenance Item</option></select>
+          </div>
+        </div>
+      </div>
+
+      <button class="btn btn-outline mb-20" style="width:100%;justify-content:center">＋ Add Rule</button>
+    </div>
+
+    <!-- Right column: preview estimate -->
+    <div>
+      <div class="card mb-16">
+        <div class="card-title"><div class="dot"></div>Estimated Output — Current Rules</div>
+        <div class="grid-2 gap mb-16">
+          <div class="stat"><div class="val">42</div><div class="lbl">Maintenance Plans</div></div>
+          <div class="stat"><div class="val">186</div><div class="lbl">Maintenance Items</div></div>
+          <div class="stat"><div class="val">186</div><div class="lbl">Task Lists</div></div>
+          <div class="stat"><div class="val">1,000</div><div class="lbl">Operations</div></div>
+        </div>
+        <div class="alert alert-green">✓ All 1,000 tasks will be assigned to a Maintenance Item</div>
+        <div class="alert alert-amber">⚠ 14 items will be split by the 8-hour cap — adjust cap to change</div>
+      </div>
+
+      <div class="card mb-16">
+        <div class="card-title"><div class="dot"></div>Rule Coverage Preview</div>
+        <table>
+          <thead><tr><th>Rule</th><th>Tasks Affected</th><th>Items Created</th></tr></thead>
+          <tbody>
+            <tr><td>Primary Grouping</td><td>1,000</td><td><span class="pill pill-gray">172</span></td></tr>
+            <tr><td>Max Duration Cap</td><td>98</td><td><span class="pill pill-amber">+14 splits</span></td></tr>
+            <tr><td>Shutdown Separation</td><td>312</td><td><span class="pill pill-purple">keeps separate</span></td></tr>
+            <tr><td>Regulatory Isolation</td><td>22</td><td><span class="pill pill-red">22 dedicated</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><div class="dot"></div>Maintenance Plan Naming</div>
+        <div class="rule-row mb-8">
+          <span class="rule-label">Plan prefix</span>
+          <input class="rule-input" style="width:120px" type="text" value="PM-LNG1" />
+        </div>
+        <div class="rule-row mb-8">
+          <span class="rule-label">Item prefix</span>
+          <input class="rule-input" style="width:120px" type="text" value="MI-LNG1" />
+        </div>
+        <div class="rule-row">
+          <span class="rule-label">Sequence</span>
+          <select class="rule-select"><option>5-digit zero-padded (00001)</option></select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+  <div class="flex justify-between">
+    <button class="btn btn-outline" onclick="showPage(0)">‹ Back</button>
+    <button class="btn btn-primary" onclick="showPage(2)">Generate Plans &nbsp;›</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<!-- PAGE 3 — REVIEW & REFINE                                -->
+<!-- ════════════════════════════════════════════════════════ -->
+<div class="page" id="page2">
+
+  <div class="progress-strip">
+    <div class="ps-step"><div class="ps-dot done">✓</div><div class="ps-label done">Ingest</div></div>
+    <div class="ps-line done"></div>
+    <div class="ps-step"><div class="ps-dot done">✓</div><div class="ps-label done">Rules</div></div>
+    <div class="ps-line done"></div>
+    <div class="ps-step"><div class="ps-dot active">3</div><div class="ps-label active">Build</div></div>
+    <div class="ps-line"></div>
+    <div class="ps-step"><div class="ps-dot">4</div><div class="ps-label">Export</div></div>
+  </div>
+
+  <div class="summary-bar mb-20">
+    <div class="s-item"><div class="s-val">42</div><div class="s-lbl">Plans</div></div>
+    <div class="s-sep"></div>
+    <div class="s-item"><div class="s-val">186</div><div class="s-lbl">Items</div></div>
+    <div class="s-sep"></div>
+    <div class="s-item"><div class="s-val">186</div><div class="s-lbl">Task Lists</div></div>
+    <div class="s-sep"></div>
+    <div class="s-item"><div class="s-val">1,000</div><div class="s-lbl">Operations</div></div>
+    <div class="s-sep"></div>
+    <div class="s-item"><div class="s-val">14</div><div class="s-lbl" style="color:var(--amber)">Split Items</div></div>
+    <div class="s-sep"></div>
+    <div class="s-item"><div class="s-val">22</div><div class="s-lbl" style="color:var(--red)">Regulatory</div></div>
+    <div style="margin-left:auto; display:flex; gap:8px">
+      <button class="btn btn-outline btn-sm" onclick="showPage(1)">✎ Edit Rules &amp; Re-run</button>
+      <button class="btn btn-outline btn-sm">⟳ Re-generate</button>
+    </div>
+  </div>
+
+  <div class="plan-layout">
+
+    <!-- Left: Plan Tree -->
+    <div class="plan-tree-panel">
+      <div class="plan-tree-header">📋 Generated Plans</div>
+      <div class="plan-tree-body">
+
+        <!-- Plan 1 -->
+        <div class="plan-node">
+          <div class="plan-node-row selected">
+            <span class="pn-icon">📁</span>
+            <span class="pn-label">PM-LNG1-C01-00001</span>
+            <span class="pn-count">6 items</span>
+          </div>
+          <div class="plan-children">
+            <div class="plan-node-row selected" style="font-size:12px">
+              <span class="pn-icon">📄</span>
+              <span class="pn-label">MI-001 · 6M · MECH-ROT</span>
+              <span class="pn-count">3 ops</span>
+            </div>
+            <div class="plan-node-row" style="font-size:12px">
+              <span class="pn-icon">📄</span>
+              <span class="pn-label">MI-002 · 6M · MECH-ROT (SHTDN)</span>
+              <span class="pn-count">2 ops</span>
+            </div>
+            <div class="plan-node-row" style="font-size:12px">
+              <span class="pn-icon">📄</span>
+              <span class="pn-label">MI-003 · 12M · MECH-ROT</span>
+              <span class="pn-count">4 ops</span>
+            </div>
+            <div class="plan-node-row" style="font-size:12px">
+              <span class="pn-icon">📄</span>
+              <span class="pn-label">MI-004 · 1M · INST</span>
+              <span class="pn-count">2 ops</span>
+            </div>
+            <div class="plan-node-row" style="font-size:12px">
+              <span class="pn-icon">📄</span>
+              <span class="pn-label">MI-005 · 3M · INST</span>
+              <span class="pn-count">3 ops</span>
+            </div>
+            <div class="plan-node-row" style="font-size:12px; color:var(--red)">
+              <span class="pn-icon">⚠️</span>
+              <span class="pn-label">MI-006 · REG · INSP</span>
+              <span class="pn-count">1 op</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="height:6px"></div>
+
+        <!-- Plan 2 -->
+        <div class="plan-node">
+          <div class="plan-node-row">
+            <span class="pn-icon">📁</span>
+            <span class="pn-label">PM-LNG1-C01-00002</span>
+            <span class="pn-count">5 items</span>
+          </div>
+        </div>
+        <div class="plan-node">
+          <div class="plan-node-row">
+            <span class="pn-icon">📁</span>
+            <span class="pn-label">PM-LNG1-C02-00001</span>
+            <span class="pn-count">4 items</span>
+          </div>
+        </div>
+        <div class="plan-node">
+          <div class="plan-node-row">
+            <span class="pn-icon">📁</span>
+            <span class="pn-label">PM-LNG1-C02-00002</span>
+            <span class="pn-count">3 items</span>
+          </div>
+        </div>
+        <div class="plan-node">
+          <div class="plan-node-row">
+            <span class="pn-icon">📁</span>
+            <span class="pn-label">PM-LNG1-E01-00001</span>
+            <span class="pn-count">6 items</span>
+          </div>
+        </div>
+        <div class="plan-node">
+          <div class="plan-node-row">
+            <span class="pn-icon">📁</span>
+            <span class="pn-label">PM-LNG1-I01-00001</span>
+            <span class="pn-count">7 items</span>
+          </div>
+        </div>
+        <div style="padding: 8px 10px; font-size:12px; color:var(--muted)">+ 36 more plans…</div>
+      </div>
+    </div>
+
+    <!-- Right: Detail -->
+    <div class="detail-panel">
+      <div class="detail-header">
+        <div>
+          <div class="title">MI-001 &nbsp;<span class="pill pill-gray">6-Monthly</span> &nbsp;<span class="pill pill-purple">MECH-ROT</span> &nbsp;<span class="pill pill-green">Online</span></div>
+          <div class="sub" style="margin-top:4px">PM-LNG1-C01-00001 · TL-LNG1-C01-K001A-001 · Planner Group: PG-MECH</div>
+        </div>
+        <div style="margin-left:auto; display:flex; gap:8px">
+          <button class="btn btn-outline btn-sm">⇄ Move Ops</button>
+          <button class="btn btn-outline btn-sm">⊕ Split Item</button>
+          <button class="btn btn-outline btn-sm">⊗ Merge</button>
+        </div>
+      </div>
+
+      <div class="detail-body">
+        <div class="flex items-center gap-8 mb-16" style="font-size:12px; color:var(--muted)">
+          <span>↕ Drag to reorder operations</span>
+          <span style="margin-left:auto">FLOC: LNG1-C01-K001A — Feed Gas Compressor A</span>
+        </div>
+
+        <div class="op-row">
+          <span class="op-num">010</span>
+          <span>Bearing inspection &amp; lubrication</span>
+          <span class="pill pill-gray">4.0 h</span>
+          <span class="pill pill-purple">MECH-ROT</span>
+          <span class="op-drag">⠿</span>
+        </div>
+        <div class="op-row">
+          <span class="op-num">020</span>
+          <span>Coupling alignment check</span>
+          <span class="pill pill-gray">2.0 h</span>
+          <span class="pill pill-purple">MECH-ROT</span>
+          <span class="op-drag">⠿</span>
+        </div>
+        <div class="op-row">
+          <span class="op-num">030</span>
+          <span>Lube oil top-up &amp; inspection</span>
+          <span class="pill pill-gray">1.0 h</span>
+          <span class="pill pill-purple">MECH-ROT</span>
+          <span class="op-drag">⠿</span>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="hours-bar">
+          <span style="font-size:12px; color:var(--muted); width:80px">Duration</span>
+          <div class="bar-track"><div class="bar-fill" style="width:87.5%"></div></div>
+          <span class="hours-label" style="color:var(--green)">7.0 h / 8.0 h max &nbsp;✓</span>
+        </div>
+
+        <div class="divider"></div>
+
+        <div style="font-size:12px; color:var(--muted); margin-bottom:8px; font-weight:600; text-transform:uppercase; letter-spacing:.4px">FMECA Traceability</div>
+        <table>
+          <thead><tr><th>Failure Mode</th><th>Criticality</th><th>Task Type</th><th>Source Row</th></tr></thead>
+          <tbody>
+            <tr><td>Bearing wear / overheating</td><td><span class="pill pill-red">High</span></td><td><span class="pill pill-gray">PM</span></td><td style="color:var(--muted)">#2</td></tr>
+            <tr><td>Misalignment / imbalance</td><td><span class="pill pill-amber">Medium</span></td><td><span class="pill pill-green">Inspection</span></td><td style="color:var(--muted)">#8</td></tr>
+            <tr><td>Lube oil degradation</td><td><span class="pill pill-amber">Medium</span></td><td><span class="pill pill-gray">PM</span></td><td style="color:var(--muted)">#11</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="divider"></div>
+  <div class="flex justify-between">
+    <button class="btn btn-outline" onclick="showPage(1)">‹ Back</button>
+    <button class="btn btn-primary" onclick="showPage(3)">Proceed to Export &nbsp;›</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<!-- PAGE 4 — EXPORT                                         -->
+<!-- ════════════════════════════════════════════════════════ -->
+<div class="page" id="page3">
+
+  <div class="progress-strip">
+    <div class="ps-step"><div class="ps-dot done">✓</div><div class="ps-label done">Ingest</div></div>
+    <div class="ps-line done"></div>
+    <div class="ps-step"><div class="ps-dot done">✓</div><div class="ps-label done">Rules</div></div>
+    <div class="ps-line done"></div>
+    <div class="ps-step"><div class="ps-dot done">✓</div><div class="ps-label done">Build</div></div>
+    <div class="ps-line done"></div>
+    <div class="ps-step"><div class="ps-dot active">4</div><div class="ps-label active">Export</div></div>
+  </div>
+
+  <div class="summary-bar mb-20">
+    <div class="s-item"><div class="s-val">42</div><div class="s-lbl">Plans</div></div>
+    <div class="s-sep"></div>
+    <div class="s-item"><div class="s-val">186</div><div class="s-lbl">Items</div></div>
+    <div class="s-sep"></div>
+    <div class="s-item"><div class="s-val">1,000</div><div class="s-lbl">Operations</div></div>
+    <div class="s-sep"></div>
+    <div class="s-item"><div class="s-val">0</div><div class="s-lbl" style="color:var(--green)">Unassigned Tasks</div></div>
+    <div class="s-sep"></div>
+    <div class="s-item"><div class="s-val">100%</div><div class="s-lbl" style="color:var(--green)">Coverage</div></div>
+  </div>
+
+  <div class="grid-2 gap">
+
+    <div>
+      <div class="section-title">Output Format <div class="line"></div></div>
+
+      <div class="export-option selected">
+        <div class="export-radio"></div>
+        <div>
+          <div class="export-title">Data Mate Staging Template</div>
+          <div class="export-desc">SAP-compatible upload workbook. Populates Plan, Item, Task List and Operation tabs ready for max-load into S/4HANA.</div>
+          <div class="export-ext">.xlsx</div>
+        </div>
+      </div>
+
+      <div class="export-option">
+        <div class="export-radio"></div>
+        <div>
+          <div class="export-title">Flat CSV Bundle</div>
+          <div class="export-desc">Separate CSVs for Maintenance Plans, Items, Task Lists and Operations. Good for further processing or QA review.</div>
+          <div class="export-ext">.zip → 4× .csv</div>
+        </div>
+      </div>
+
+      <div class="export-option">
+        <div class="export-radio"></div>
+        <div>
+          <div class="export-title">Full JSON (ERD Structure)</div>
+          <div class="export-desc">Structured JSON matching the data model — suitable for API ingestion or downstream system integration.</div>
+          <div class="export-ext">.json</div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="section-title">Include <div class="line"></div></div>
+      <div class="checkbox-row"><input type="checkbox" checked /> Maintenance Plans &amp; Items</div>
+      <div class="checkbox-row"><input type="checkbox" checked /> Task Lists &amp; Operations</div>
+      <div class="checkbox-row"><input type="checkbox" checked /> Planner Group &amp; Work Centre assignments</div>
+      <div class="checkbox-row"><input type="checkbox" checked /> FMECA traceability (source row references)</div>
+      <div class="checkbox-row"><input type="checkbox" /> Rule audit trail (which rule created each item)</div>
+    </div>
+
+    <div>
+      <div class="section-title">Export Preview <div class="line"></div></div>
+      <div class="card mb-16">
+        <div class="card-title"><div class="dot"></div>Data Mate — Sheet: MAINTENANCE PLAN</div>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Plan ID</th><th>Description</th><th>Planner Grp</th><th>Work Centre</th><th>FLOC</th></tr></thead>
+            <tbody>
+              <tr><td>PM-LNG1-C01-00001</td><td>Feed Gas Compression — 6M MECH</td><td>PG-MECH</td><td>MECH-ROT</td><td>LNG1-C01</td></tr>
+              <tr><td>PM-LNG1-C01-00002</td><td>Feed Gas Compression — 12M MECH</td><td>PG-MECH</td><td>MECH-ROT</td><td>LNG1-C01</td></tr>
+              <tr><td>PM-LNG1-C01-00003</td><td>Feed Gas Compression — INSTR</td><td>PG-INSTR</td><td>INST</td><td>LNG1-C01</td></tr>
+              <tr><td style="color:var(--muted)" colspan="5">… 39 more rows</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card mb-16">
+        <div class="card-title"><div class="dot"></div>Data Mate — Sheet: MAINTENANCE ITEM</div>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Item ID</th><th>Plan ID</th><th>Freq</th><th>Unit</th><th>Task List</th></tr></thead>
+            <tbody>
+              <tr><td>MI-LNG1-C01-K001A-001</td><td>PM-LNG1-C01-00001</td><td>6</td><td>M</td><td>TL-001</td></tr>
+              <tr><td>MI-LNG1-C01-K001A-002</td><td>PM-LNG1-C01-00001</td><td>6</td><td>M</td><td>TL-002</td></tr>
+              <tr><td style="color:var(--muted)" colspan="5">… 184 more rows</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="alert alert-green" style="margin-bottom:16px">✓ All validations passed — ready for SAP load</div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;font-size:15px;padding:12px">⬇ Download Data Mate Template</button>
+    </div>
+
+  </div>
+
+  <div class="divider"></div>
+  <div class="flex justify-between">
+    <button class="btn btn-outline" onclick="showPage(2)">‹ Back</button>
+    <div class="text-muted text-sm" style="line-height:36px">Generated 31 Mar 2026 · LNG Train 1 &amp; 2 · 1,000 tasks · 42 plans</div>
+  </div>
+</div>
+
+</div><!-- /main -->
+
+<script>
+function showPage(n) {
+  document.querySelectorAll('.page').forEach((p, i) => {
+    p.classList.toggle('active', i === n);
+  });
+  document.querySelectorAll('.tabbar .tab').forEach((t, i) => {
+    t.classList.remove('active', 'done');
+    if (i === n) t.classList.add('active');
+    else if (i < n) t.classList.add('done');
+  });
+}
+
+// Export option click
+document.querySelectorAll('.export-option').forEach(opt => {
+  opt.addEventListener('click', () => {
+    document.querySelectorAll('.export-option').forEach(o => o.classList.remove('selected'));
+    opt.classList.add('selected');
+  });
+});
+</script>
+</body>
+</html>

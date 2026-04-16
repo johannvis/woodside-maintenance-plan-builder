@@ -1,4 +1,4 @@
-"""Woodside Maintenance Plan Builder — Streamlit entry point."""
+"""Maintenance Plan Builder — Streamlit entry point."""
 
 import streamlit as st
 from config import APP_TITLE, APP_ICON

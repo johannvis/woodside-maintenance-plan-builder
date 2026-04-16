@@ -1,0 +1,1864 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Maintenance Plan Builder — POC v2</title>
+<style>
+  :root {
+    --accent:    #A100FF;
+    --accent-lt: #f3e6ff;
+    --accent-dk: #7a00c2;
+    --green:     #1ab394;
+    --green-lt:  #e6f9f5;
+    --amber:     #f5a623;
+    --amber-lt:  #fff8ec;
+    --red:       #e74c3c;
+    --blue:      #2196F3;
+    --blue-lt:   #e3f2fd;
+    --bg:        #f4f5f7;
+    --surface:   #ffffff;
+    --border:    #e0e0e0;
+    --text:      #1a1a2e;
+    --muted:     #6b7280;
+    --nav-h:     56px;
+    --sidebar-w: 260px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+  }
+
+  /* ── TOP NAV ── */
+  .topnav {
+    height: var(--nav-h);
+    background: var(--text);
+    display: flex;
+    align-items: center;
+    padding: 0 24px;
+    gap: 12px;
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    box-shadow: 0 2px 8px rgba(0,0,0,.3);
+  }
+  .topnav .logo {
+    color: var(--accent);
+    font-weight: 800;
+    font-size: 18px;
+    letter-spacing: -0.5px;
+    margin-right: 8px;
+  }
+  .topnav .app-title {
+    color: #fff;
+    font-size: 15px;
+    font-weight: 500;
+  }
+  .topnav .sep { flex: 1; }
+  .topnav .badge {
+    background: var(--accent);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 4px;
+    letter-spacing: .5px;
+  }
+  .topnav .user-chip {
+    background: #2d2d44;
+    color: #ccc;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+  }
+
+  /* ── TAB BAR ── */
+  .tabbar {
+    position: fixed;
+    top: var(--nav-h);
+    left: 0; right: 0;
+    background: var(--surface);
+    border-bottom: 2px solid var(--border);
+    display: flex;
+    align-items: stretch;
+    z-index: 90;
+    padding: 0 24px;
+  }
+  .tabbar .tab {
+    padding: 0 20px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    color: var(--muted);
+    font-weight: 500;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    transition: all .15s;
+    user-select: none;
+    white-space: nowrap;
+  }
+  .tabbar .tab:hover { color: var(--accent); }
+  .tabbar .tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  .tabbar .tab .step-num {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: var(--bg);
+    border: 1.5px solid currentColor;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .tabbar .tab.active .step-num,
+  .tabbar .tab.done .step-num {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .tabbar .tab.done { color: var(--accent); opacity: .6; }
+  .tabbar .tab-arrow { color: var(--border); padding: 0 4px; line-height: 44px; }
+
+  /* ── MAIN LAYOUT ── */
+  .main {
+    margin-top: calc(var(--nav-h) + 44px);
+    padding: 24px;
+    min-height: calc(100vh - var(--nav-h) - 44px);
+  }
+
+  /* ── PAGES ── */
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* ── CARDS ── */
+  .card {
+    background: var(--surface);
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    padding: 20px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.05);
+  }
+  .card-title {
+    font-weight: 700;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: .6px;
+    color: var(--muted);
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card-title .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+
+  /* ── GRID HELPERS ── */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; }
+  .gap { gap: 16px; }
+
+  /* ── STAT CHIPS ── */
+  .stat-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+  .stat {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 120px;
+  }
+  .stat .val {
+    font-size: 26px;
+    font-weight: 800;
+    color: var(--accent);
+    line-height: 1;
+  }
+  .stat .lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+
+  /* ── UPLOAD ZONE ── */
+  .upload-zone {
+    border: 2px dashed var(--accent);
+    border-radius: 10px;
+    padding: 32px;
+    text-align: center;
+    background: var(--accent-lt);
+    margin-bottom: 20px;
+    cursor: pointer;
+  }
+  .upload-zone .icon { font-size: 36px; margin-bottom: 8px; }
+  .upload-zone .title { font-weight: 700; font-size: 15px; color: var(--accent); }
+  .upload-zone .sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .upload-zone .filename {
+    margin-top: 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--accent);
+    color: #fff;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  /* ── TREE VIEW (left hierarchy panels) ── */
+  .asset-tree-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    width: 280px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .asset-tree-header {
+    padding: 12px 14px;
+    background: var(--text);
+    color: #fff;
+    font-weight: 600;
+    font-size: 13px;
+    display: flex; align-items: center; gap: 8px;
+    flex-shrink: 0;
+  }
+  .asset-tree-body {
+    padding: 6px;
+    overflow-y: auto;
+    flex: 1;
+    max-height: 560px;
+  }
+
+  /* ── ASSET HIERARCHY TREE NODES ── */
+  .ht-node { user-select: none; }
+  .ht-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 6px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1.4;
+  }
+  .ht-row:hover { background: var(--accent-lt); }
+  .ht-row.selected { background: var(--accent-lt); color: var(--accent); font-weight: 600; }
+  .ht-caret {
+    font-size: 9px;
+    color: var(--muted);
+    width: 12px;
+    flex-shrink: 0;
+    text-align: center;
+    transition: transform .15s;
+  }
+  .ht-caret.open { transform: rotate(90deg); }
+  .ht-caret.leaf { opacity: 0; }
+  .ht-icon { font-size: 13px; flex-shrink: 0; }
+  .ht-label { flex: 1; }
+  .ht-count {
+    font-size: 11px;
+    color: var(--muted);
+    background: var(--bg);
+    padding: 1px 6px;
+    border-radius: 10px;
+    flex-shrink: 0;
+  }
+  .ht-children { padding-left: 18px; border-left: 1.5px solid var(--border); margin-left: 10px; }
+  .ht-more {
+    font-size: 11px;
+    color: var(--muted);
+    padding: 2px 6px 4px 8px;
+    font-style: italic;
+  }
+  .ht-root-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 6px;
+    border-radius: 5px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .ht-root-row:hover { background: var(--bg); }
+
+  /* ── TWO-COLUMN SPLIT (pages 1 and 3) ── */
+  .split-layout {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+  }
+  .split-right {
+    flex: 1;
+    min-width: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .split-right-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--bg);
+    flex-shrink: 0;
+  }
+  .split-right-header .title {
+    font-weight: 700;
+    font-size: 14px;
+  }
+  .split-right-header .sub {
+    font-size: 12px;
+    color: var(--muted);
+    margin-left: auto;
+  }
+  .split-right-body {
+    padding: 0;
+    overflow-y: auto;
+    max-height: 560px;
+  }
+
+  /* ── TABLE ── */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th {
+    background: var(--bg);
+    padding: 9px 12px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+    color: var(--muted);
+    border-bottom: 2px solid var(--border);
+    white-space: nowrap;
+  }
+  tbody tr { border-bottom: 1px solid var(--border); }
+  tbody tr:hover { background: var(--bg); }
+  tbody td { padding: 8px 12px; vertical-align: middle; }
+  .table-scroll { overflow-x: auto; }
+
+  /* ── TAGS / PILLS ── */
+  .pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .pill-purple  { background: var(--accent-lt); color: var(--accent); }
+  .pill-green   { background: var(--green-lt);  color: var(--green); }
+  .pill-amber   { background: var(--amber-lt);  color: var(--amber); }
+  .pill-red     { background: #fde8e8;           color: var(--red); }
+  .pill-blue    { background: var(--blue-lt);    color: var(--blue); }
+  .pill-gray    { background: #f0f0f0;            color: #555; }
+
+  /* ── BUTTONS ── */
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all .15s;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-dk); }
+  .btn-outline {
+    background: #fff;
+    border: 1.5px solid var(--border);
+    color: var(--text);
+  }
+  .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-ghost { background: transparent; color: var(--muted); }
+  .btn-ghost:hover { color: var(--accent); background: var(--accent-lt); }
+  .btn-green { background: var(--green); color: #fff; }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+  /* ── RULE CARD ── */
+  .rule-card {
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 12px;
+    overflow: hidden;
+  }
+  .rule-header {
+    background: var(--bg);
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+  }
+  .rule-num {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .rule-name { font-weight: 600; font-size: 13px; flex: 1; }
+  .rule-desc { font-size: 12px; color: var(--muted); }
+  .rule-body {
+    padding: 14px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+  }
+  .rule-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 13px; }
+  .rule-row:last-child { margin-bottom: 0; }
+  .rule-label { color: var(--muted); width: 120px; flex-shrink: 0; font-size: 12px; }
+  .rule-select {
+    border: 1.5px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-size: 13px;
+    background: var(--bg);
+    color: var(--text);
+    cursor: pointer;
+    outline: none;
+    appearance: none;
+    padding-right: 24px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236b7280'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+  }
+  .rule-plus { color: var(--muted); font-size: 16px; }
+  .rule-input {
+    border: 1.5px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-size: 13px;
+    width: 60px;
+    text-align: center;
+  }
+
+  /* ── PLAN HIERARCHY TREE (right panel, page 3) ── */
+  .plan-hier-scroll {
+    overflow-y: auto;
+    max-height: 560px;
+    padding: 8px;
+  }
+
+  /* Plan row (level 0) */
+  .ph-plan {
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 6px;
+    border: 1px solid var(--border);
+  }
+  .ph-plan-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 12px;
+    background: #2a2a3e;
+    color: #e8e8f0;
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .ph-plan-row:hover { background: #343450; }
+  .ph-plan-icon { font-size: 14px; flex-shrink: 0; }
+  .ph-plan-label { flex: 1; }
+  .ph-plan-badge {
+    font-size: 11px;
+    background: rgba(161,0,255,.35);
+    color: #d68aff;
+    padding: 2px 7px;
+    border-radius: 10px;
+    font-weight: 600;
+  }
+  .ph-toggle {
+    font-size: 11px;
+    color: #9ca3af;
+    width: 16px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+
+  /* Item row (level 1 — indent 20px) */
+  .ph-items { padding-left: 0; }
+  .ph-item-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 12px 7px 32px;
+    background: #f8f6ff;
+    border-top: 1px solid var(--border);
+    cursor: pointer;
+    font-size: 12.5px;
+    user-select: none;
+  }
+  .ph-item-row:hover { background: var(--accent-lt); }
+  .ph-item-icon { flex-shrink: 0; }
+  .ph-item-label { flex: 1; }
+  .ph-item-tl {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: monospace;
+    background: var(--bg);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+  .ph-item-toggle {
+    font-size: 11px;
+    color: var(--muted);
+    width: 16px;
+    text-align: center;
+  }
+
+  /* Task List row (level 2 — indent 40px) */
+  .ph-tasklist-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 12px 5px 52px;
+    background: #fafafa;
+    border-top: 1px solid #f0f0f0;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--muted);
+    user-select: none;
+  }
+  .ph-tasklist-row:hover { background: var(--accent-lt); color: var(--accent); }
+  .ph-tl-label { flex: 1; font-family: monospace; }
+  .ph-tl-toggle {
+    font-size: 11px;
+    width: 16px;
+    text-align: center;
+  }
+
+  /* Operation row (level 3 — indent 60px) */
+  .ph-operations { }
+  .ph-op-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 12px 5px 68px;
+    background: #fff;
+    border-top: 1px solid #f5f5f5;
+    font-size: 12px;
+  }
+  .ph-op-num {
+    font-family: monospace;
+    font-weight: 700;
+    color: var(--muted);
+    width: 30px;
+    flex-shrink: 0;
+  }
+  .ph-op-desc { flex: 1; }
+  .ph-op-hours {
+    font-size: 11px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  /* ── PAGE 3 ORIGINAL DETAIL PANEL (kept for ops display) ── */
+  .detail-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .detail-header {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 12px;
+  }
+  .detail-header .title { font-weight: 700; font-size: 15px; }
+  .detail-header .sub { font-size: 12px; color: var(--muted); }
+  .detail-body { padding: 16px; flex: 1; overflow-y: auto; }
+  .op-row {
+    display: grid;
+    grid-template-columns: 40px 1fr 60px 80px 30px;
+    align-items: center;
+    padding: 8px 10px;
+    border-radius: 6px;
+    gap: 10px;
+    margin-bottom: 4px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    font-size: 13px;
+  }
+  .op-row:hover { border-color: var(--accent); background: var(--accent-lt); }
+  .op-num { font-weight: 700; color: var(--muted); }
+  .op-drag { color: var(--border); cursor: grab; font-size: 16px; text-align: center; }
+  .op-drag:hover { color: var(--accent); }
+  .hours-bar { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+  .bar-track {
+    flex: 1; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden;
+  }
+  .bar-fill { height: 100%; border-radius: 4px; background: var(--green); }
+  .bar-fill.warn { background: var(--amber); }
+  .bar-fill.over { background: var(--red); }
+  .hours-label { font-size: 12px; font-weight: 600; }
+
+  /* ── EXPORT PAGE ── */
+  .export-option {
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    transition: all .15s;
+    margin-bottom: 10px;
+  }
+  .export-option:hover { border-color: var(--accent); background: var(--accent-lt); }
+  .export-option.selected { border-color: var(--accent); background: var(--accent-lt); }
+  .export-radio {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .export-option.selected .export-radio {
+    border-color: var(--accent);
+    background: var(--accent);
+  }
+  .export-option.selected .export-radio::after {
+    content: '';
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #fff;
+  }
+  .export-title { font-weight: 700; font-size: 13px; }
+  .export-desc { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .export-ext {
+    margin-top: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: var(--bg);
+    color: var(--muted);
+    display: inline-block;
+  }
+  .checkbox-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 13px; }
+  .checkbox-row input[type=checkbox] { accent-color: var(--accent); width: 15px; height: 15px; }
+
+  /* ── SUMMARY BAR ── */
+  .summary-bar {
+    background: var(--text);
+    color: #fff;
+    border-radius: 8px;
+    padding: 12px 18px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    font-size: 13px;
+    margin-bottom: 20px;
+  }
+  .summary-bar .s-item { display: flex; flex-direction: column; gap: 1px; }
+  .summary-bar .s-val { font-size: 20px; font-weight: 800; color: var(--accent); }
+  .summary-bar .s-lbl { font-size: 10px; color: #9ca3af; text-transform: uppercase; letter-spacing: .5px; }
+  .summary-bar .s-sep { width: 1px; height: 32px; background: #374151; }
+
+  /* ── ALERTS ── */
+  .alert {
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .alert-green { background: var(--green-lt); color: var(--green); border: 1px solid #a3e4d7; }
+  .alert-amber { background: var(--amber-lt); color: #b7770d; border: 1px solid #f9d28a; }
+
+  /* ── SECTION TITLE ── */
+  .section-title {
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .section-title .line { flex: 1; height: 1px; background: var(--border); }
+
+  /* ── MISC ── */
+  .flex { display: flex; }
+  .flex-col { display: flex; flex-direction: column; }
+  .items-center { align-items: center; }
+  .justify-between { justify-content: space-between; }
+  .gap-8 { gap: 8px; }
+  .gap-12 { gap: 12px; }
+  .gap-16 { gap: 16px; }
+  .mb-8 { margin-bottom: 8px; }
+  .mb-12 { margin-bottom: 12px; }
+  .mb-16 { margin-bottom: 16px; }
+  .mb-20 { margin-bottom: 20px; }
+  .text-muted { color: var(--muted); }
+  .text-sm { font-size: 12px; }
+  .font-bold { font-weight: 700; }
+  .divider { height: 1px; background: var(--border); margin: 16px 0; }
+
+  /* ── PROGRESS STEPS ── */
+  .progress-strip {
+    display: flex;
+    align-items: center;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 20px;
+    margin-bottom: 20px;
+    gap: 8px;
+  }
+  .ps-step { display: flex; align-items: center; gap: 8px; }
+  .ps-dot {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; color: var(--muted);
+  }
+  .ps-dot.done { background: var(--green); border-color: var(--green); color: #fff; }
+  .ps-dot.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .ps-label { font-size: 12px; font-weight: 600; color: var(--muted); }
+  .ps-label.active { color: var(--accent); }
+  .ps-label.done { color: var(--green); }
+  .ps-line { flex: 1; height: 2px; background: var(--border); border-radius: 1px; }
+  .ps-line.done { background: var(--green); }
+</style>
+</head>
+<body>
+
+<!-- TOP NAV -->
+<div class="topnav">
+  <div class="logo">■</div>
+  <div class="app-title">Maintenance Plan Builder</div>
+  <div class="sep"></div>
+  <div class="badge">POC</div>
+  <div class="user-chip">LNG Train 1</div>
+</div>
+
+<!-- TAB BAR -->
+<div class="tabbar">
+  <div class="tab active" onclick="showPage(0)" id="tab0">
+    <div class="step-num">1</div> Ingest &amp; Preview
+  </div>
+  <div class="tab-arrow">›</div>
+  <div class="tab" onclick="showPage(1)" id="tab1">
+    <div class="step-num">2</div> Rule Editor
+  </div>
+  <div class="tab-arrow">›</div>
+  <div class="tab" onclick="showPage(2)" id="tab2">
+    <div class="step-num">3</div> Review &amp; Refine
+  </div>
+  <div class="tab-arrow">›</div>
+  <div class="tab" onclick="showPage(3)" id="tab3">
+    <div class="step-num">4</div> Export
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<!-- PAGE 1 — INGEST & PREVIEW                               -->
+<!-- ════════════════════════════════════════════════════════ -->
+<div class="main">
+<div class="page active" id="page0">
+
+  <div class="progress-strip">
+    <div class="ps-step"><div class="ps-dot active">1</div><div class="ps-label active">Ingest</div></div>
+    <div class="ps-line"></div>
+    <div class="ps-step"><div class="ps-dot">2</div><div class="ps-label">Rules</div></div>
+    <div class="ps-line"></div>
+    <div class="ps-step"><div class="ps-dot">3</div><div class="ps-label">Build</div></div>
+    <div class="ps-line"></div>
+    <div class="ps-step"><div class="ps-dot">4</div><div class="ps-label">Export</div></div>
+  </div>
+
+  <!-- Upload zone -->
+  <div class="upload-zone" style="cursor:default">
+    <div class="icon">📂</div>
+    <div class="title">FMECA / Task List Loaded</div>
+    <div class="sub">Drag a new .xlsx here to replace, or browse</div>
+    <div class="filename">✓ LNG_Train_FLOC_FMECA_Synthetic.xlsx</div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stat-row">
+    <div class="stat"><div class="val">1,000</div><div class="lbl">Tasks</div></div>
+    <div class="stat"><div class="val">87</div><div class="lbl">Functional Locations</div></div>
+    <div class="stat"><div class="val">15</div><div class="lbl">Asset Classes</div></div>
+    <div class="stat"><div class="val">10</div><div class="lbl">Systems</div></div>
+    <div class="stat"><div class="val">2</div><div class="lbl">LNG Trains</div></div>
+  </div>
+
+  <!-- Two-column split layout -->
+  <div class="split-layout mb-20" id="p1-split">
+
+    <!-- Left: Asset Hierarchy Tree -->
+    <div class="asset-tree-panel">
+      <div class="asset-tree-header">🏭 Asset Hierarchy</div>
+      <div class="asset-tree-body" id="p1-tree-body">
+        <!-- Rendered by JS -->
+      </div>
+    </div>
+
+    <!-- Right: Task Table -->
+    <div class="split-right">
+      <div class="split-right-header">
+        <div class="title" id="p1-panel-title">Tasks — C01 Feed Gas Compression</div>
+        <div class="sub" id="p1-panel-sub">220 tasks</div>
+      </div>
+      <div class="split-right-body">
+        <div class="table-scroll">
+          <table id="p1-task-table">
+            <thead>
+              <tr>
+                <th>Equipment</th>
+                <th>Task Description</th>
+                <th>Type</th>
+                <th>Interval</th>
+                <th>Duration (hrs)</th>
+                <th>Resource</th>
+                <th>Online</th>
+                <th>Criticality</th>
+              </tr>
+            </thead>
+            <tbody id="p1-task-tbody">
+              <!-- Rendered by JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Distribution charts -->
+  <div class="grid-3 gap mb-20">
+    <div class="card">
+      <div class="card-title"><div class="dot"></div>Task Type Distribution</div>
+      <div style="font-size:13px">
+        <div class="flex items-center gap-8 mb-8"><span class="pill pill-green" style="width:80px;text-align:center">Inspection</span> <div style="flex:1;height:8px;background:var(--bg);border-radius:4px;overflow:hidden"><div style="width:40%;height:100%;background:var(--green);border-radius:4px"></div></div> <span class="text-muted">401</span></div>
+        <div class="flex items-center gap-8 mb-8"><span class="pill pill-gray" style="width:80px;text-align:center">PM</span> <div style="flex:1;height:8px;background:var(--bg);border-radius:4px;overflow:hidden"><div style="width:36%;height:100%;background:#9ca3af;border-radius:4px"></div></div> <span class="text-muted">364</span></div>
+        <div class="flex items-center gap-8 mb-8"><span class="pill pill-purple" style="width:80px;text-align:center">PdM</span> <div style="flex:1;height:8px;background:var(--bg);border-radius:4px;overflow:hidden"><div style="width:19%;height:100%;background:var(--accent);border-radius:4px"></div></div> <span class="text-muted">188</span></div>
+        <div class="flex items-center gap-8"><span class="pill pill-blue" style="width:80px;text-align:center">CBM</span> <div style="flex:1;height:8px;background:var(--bg);border-radius:4px;overflow:hidden"><div style="width:5%;height:100%;background:var(--blue);border-radius:4px"></div></div> <span class="text-muted">47</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title"><div class="dot"></div>Planner Group Split</div>
+      <div style="font-size:13px">
+        <div class="flex items-center gap-8 mb-8"><span style="width:80px;font-size:12px;color:var(--muted)">PG-MECH</span> <div style="flex:1;height:8px;background:var(--bg);border-radius:4px;overflow:hidden"><div style="width:48%;height:100%;background:var(--accent);border-radius:4px"></div></div> <span class="text-muted">481</span></div>
+        <div class="flex items-center gap-8 mb-8"><span style="width:80px;font-size:12px;color:var(--muted)">PG-INSTR</span> <div style="flex:1;height:8px;background:var(--bg);border-radius:4px;overflow:hidden"><div style="width:26%;height:100%;background:var(--blue);border-radius:4px"></div></div> <span class="text-muted">263</span></div>
+        <div class="flex items-center gap-8 mb-8"><span style="width:80px;font-size:12px;color:var(--muted)">PG-INSP</span> <div style="flex:1;height:8px;background:var(--bg);border-radius:4px;overflow:hidden"><div style="width:15%;height:100%;background:var(--green);border-radius:4px"></div></div> <span class="text-muted">151</span></div>
+        <div class="flex items-center gap-8 mb-8"><span style="width:80px;font-size:12px;color:var(--muted)">PG-ELEC</span> <div style="flex:1;height:8px;background:var(--bg);border-radius:4px;overflow:hidden"><div style="width:10%;height:100%;background:var(--amber);border-radius:4px"></div></div> <span class="text-muted">96</span></div>
+        <div class="flex items-center gap-8"><span style="width:80px;font-size:12px;color:var(--muted)">PG-CIVIL</span> <div style="flex:1;height:8px;background:var(--bg);border-radius:4px;overflow:hidden"><div style="width:1%;height:100%;background:#ccc;border-radius:4px"></div></div> <span class="text-muted">9</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title"><div class="dot"></div>Criticality Profile</div>
+      <div style="font-size:13px">
+        <div class="flex items-center gap-8 mb-8"><span class="pill pill-red" style="width:80px;text-align:center">High</span> <div style="flex:1;height:8px;background:var(--bg);border-radius:4px;overflow:hidden"><div style="width:55%;height:100%;background:var(--red);border-radius:4px"></div></div> <span class="text-muted">548</span></div>
+        <div class="flex items-center gap-8 mb-8"><span class="pill pill-amber" style="width:80px;text-align:center">Medium</span> <div style="flex:1;height:8px;background:var(--bg);border-radius:4px;overflow:hidden"><div style="width:35%;height:100%;background:var(--amber);border-radius:4px"></div></div> <span class="text-muted">352</span></div>
+        <div class="flex items-center gap-8"><span class="pill pill-green" style="width:80px;text-align:center">Low</span> <div style="flex:1;height:8px;background:var(--bg);border-radius:4px;overflow:hidden"><div style="width:10%;height:100%;background:var(--green);border-radius:4px"></div></div> <span class="text-muted">100</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flex justify-between items-center">
+    <div class="text-muted text-sm">✓ Data validated — no missing required fields</div>
+    <button class="btn btn-primary" onclick="showPage(1)">Configure Rules &nbsp;›</button>
+  </div>
+
+</div>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<!-- PAGE 2 — RULE EDITOR                                    -->
+<!-- ════════════════════════════════════════════════════════ -->
+<div class="page" id="page1">
+
+  <div class="progress-strip">
+    <div class="ps-step"><div class="ps-dot done">✓</div><div class="ps-label done">Ingest</div></div>
+    <div class="ps-line done"></div>
+    <div class="ps-step"><div class="ps-dot active">2</div><div class="ps-label active">Rules</div></div>
+    <div class="ps-line"></div>
+    <div class="ps-step"><div class="ps-dot">3</div><div class="ps-label">Build</div></div>
+    <div class="ps-line"></div>
+    <div class="ps-step"><div class="ps-dot">4</div><div class="ps-label">Export</div></div>
+  </div>
+
+  <div class="grid-2 gap">
+    <div>
+      <div class="flex justify-between items-center mb-16">
+        <div class="section-title" style="margin-bottom:0">Rule Set <span class="pill pill-purple" style="font-size:12px">LNG Train — Standard</span></div>
+        <div class="flex gap-8">
+          <button class="btn btn-outline btn-sm">📂 Load Rule Set</button>
+          <button class="btn btn-outline btn-sm">💾 Save Rule Set</button>
+        </div>
+      </div>
+
+      <!-- Rule 1 -->
+      <div class="rule-card">
+        <div class="rule-header">
+          <div class="rule-num">1</div>
+          <div>
+            <div class="rule-name">Primary Grouping</div>
+            <div class="rule-desc">Group tasks into Maintenance Items by shared attributes</div>
+          </div>
+          <button class="btn btn-ghost btn-sm" style="margin-left:auto">✎ Edit</button>
+          <button class="btn btn-ghost btn-sm">🗑</button>
+        </div>
+        <div class="rule-body">
+          <div class="rule-row">
+            <span class="rule-label">Group by</span>
+            <select class="rule-select"><option>Planner Group</option></select>
+            <span class="rule-plus">+</span>
+            <select class="rule-select"><option>Interval</option></select>
+            <span class="rule-plus">+</span>
+            <select class="rule-select"><option>System</option></select>
+          </div>
+          <div class="rule-row">
+            <span class="rule-label">Then by</span>
+            <select class="rule-select"><option>Shutdown Required</option></select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Rule 2 -->
+      <div class="rule-card">
+        <div class="rule-header">
+          <div class="rule-num">2</div>
+          <div>
+            <div class="rule-name">Max Duration Cap</div>
+            <div class="rule-desc">Split items that exceed the hour limit</div>
+          </div>
+          <button class="btn btn-ghost btn-sm" style="margin-left:auto">✎ Edit</button>
+          <button class="btn btn-ghost btn-sm">🗑</button>
+        </div>
+        <div class="rule-body">
+          <div class="rule-row">
+            <span class="rule-label">If total hours</span>
+            <span style="color:var(--muted)">exceeds</span>
+            <input class="rule-input" type="number" value="8" />
+            <span style="color:var(--muted)">hours</span>
+          </div>
+          <div class="rule-row">
+            <span class="rule-label">Then</span>
+            <select class="rule-select"><option>Split into additional Maintenance Item</option></select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Rule 3 -->
+      <div class="rule-card">
+        <div class="rule-header">
+          <div class="rule-num">3</div>
+          <div>
+            <div class="rule-name">Shutdown Separation</div>
+            <div class="rule-desc">Keep online and shutdown tasks in separate items</div>
+          </div>
+          <button class="btn btn-ghost btn-sm" style="margin-left:auto">✎ Edit</button>
+          <button class="btn btn-ghost btn-sm">🗑</button>
+        </div>
+        <div class="rule-body">
+          <div class="rule-row">
+            <span class="rule-label">Condition</span>
+            <select class="rule-select"><option>Shutdown Required = Yes</option></select>
+          </div>
+          <div class="rule-row">
+            <span class="rule-label">Action</span>
+            <select class="rule-select"><option>Assign to separate Maintenance Item</option></select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Rule 4 -->
+      <div class="rule-card">
+        <div class="rule-header">
+          <div class="rule-num">4</div>
+          <div>
+            <div class="rule-name">Regulatory Isolation</div>
+            <div class="rule-desc">Regulatory tasks always get a dedicated item</div>
+          </div>
+          <button class="btn btn-ghost btn-sm" style="margin-left:auto">✎ Edit</button>
+          <button class="btn btn-ghost btn-sm">🗑</button>
+        </div>
+        <div class="rule-body">
+          <div class="rule-row">
+            <span class="rule-label">Condition</span>
+            <select class="rule-select"><option>Is Regulatory = Yes</option></select>
+          </div>
+          <div class="rule-row">
+            <span class="rule-label">Action</span>
+            <select class="rule-select"><option>Create dedicated Maintenance Item</option></select>
+          </div>
+        </div>
+      </div>
+
+      <button class="btn btn-outline mb-20" style="width:100%;justify-content:center">＋ Add Rule</button>
+    </div>
+
+    <!-- Right column: preview estimate -->
+    <div>
+      <div class="card mb-16">
+        <div class="card-title"><div class="dot"></div>Estimated Output — Current Rules</div>
+        <div class="grid-2 gap mb-16">
+          <div class="stat"><div class="val">42</div><div class="lbl">Maintenance Plans</div></div>
+          <div class="stat"><div class="val">186</div><div class="lbl">Maintenance Items</div></div>
+          <div class="stat"><div class="val">186</div><div class="lbl">Task Lists</div></div>
+          <div class="stat"><div class="val">1,000</div><div class="lbl">Operations</div></div>
+        </div>
+        <div class="alert alert-green">✓ All 1,000 tasks will be assigned to a Maintenance Item</div>
+        <div class="alert alert-amber">⚠ 14 items will be split by the 8-hour cap — adjust cap to change</div>
+      </div>
+
+      <div class="card mb-16">
+        <div class="card-title"><div class="dot"></div>Rule Coverage Preview</div>
+        <table>
+          <thead><tr><th>Rule</th><th>Tasks Affected</th><th>Items Created</th></tr></thead>
+          <tbody>
+            <tr><td>Primary Grouping</td><td>1,000</td><td><span class="pill pill-gray">172</span></td></tr>
+            <tr><td>Max Duration Cap</td><td>98</td><td><span class="pill pill-amber">+14 splits</span></td></tr>
+            <tr><td>Shutdown Separation</td><td>312</td><td><span class="pill pill-purple">keeps separate</span></td></tr>
+            <tr><td>Regulatory Isolation</td><td>22</td><td><span class="pill pill-red">22 dedicated</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><div class="dot"></div>Maintenance Plan Naming</div>
+        <div class="rule-row mb-8">
+          <span class="rule-label">Plan prefix</span>
+          <input class="rule-input" style="width:120px" type="text" value="PM-LNG1" />
+        </div>
+        <div class="rule-row mb-8">
+          <span class="rule-label">Item prefix</span>
+          <input class="rule-input" style="width:120px" type="text" value="MI-LNG1" />
+        </div>
+        <div class="rule-row">
+          <span class="rule-label">Sequence</span>
+          <select class="rule-select"><option>5-digit zero-padded (00001)</option></select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+  <div class="flex justify-between">
+    <button class="btn btn-outline" onclick="showPage(0)">‹ Back</button>
+    <button class="btn btn-primary" onclick="showPage(2)">Generate Plans &nbsp;›</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<!-- PAGE 3 — REVIEW & REFINE                                -->
+<!-- ════════════════════════════════════════════════════════ -->
+<div class="page" id="page2">
+
+  <div class="progress-strip">
+    <div class="ps-step"><div class="ps-dot done">✓</div><div class="ps-label done">Ingest</div></div>
+    <div class="ps-line done"></div>
+    <div class="ps-step"><div class="ps-dot done">✓</div><div class="ps-label done">Rules</div></div>
+    <div class="ps-line done"></div>
+    <div class="ps-step"><div class="ps-dot active">3</div><div class="ps-label active">Build</div></div>
+    <div class="ps-line"></div>
+    <div class="ps-step"><div class="ps-dot">4</div><div class="ps-label">Export</div></div>
+  </div>
+
+  <div class="summary-bar mb-20">
+    <div class="s-item"><div class="s-val">42</div><div class="s-lbl">Plans</div></div>
+    <div class="s-sep"></div>
+    <div class="s-item"><div class="s-val">186</div><div class="s-lbl">Items</div></div>
+    <div class="s-sep"></div>
+    <div class="s-item"><div class="s-val">186</div><div class="s-lbl">Task Lists</div></div>
+    <div class="s-sep"></div>
+    <div class="s-item"><div class="s-val">1,000</div><div class="s-lbl">Operations</div></div>
+    <div class="s-sep"></div>
+    <div class="s-item"><div class="s-val">14</div><div class="s-lbl" style="color:var(--amber)">Split Items</div></div>
+    <div class="s-sep"></div>
+    <div class="s-item"><div class="s-val">22</div><div class="s-lbl" style="color:var(--red)">Regulatory</div></div>
+    <div style="margin-left:auto; display:flex; gap:8px">
+      <button class="btn btn-outline btn-sm" onclick="showPage(1)">✎ Edit Rules &amp; Re-run</button>
+      <button class="btn btn-outline btn-sm">⟳ Re-generate</button>
+    </div>
+  </div>
+
+  <!-- Two-column split layout -->
+  <div class="split-layout" id="p3-split">
+
+    <!-- Left: Asset Hierarchy Tree -->
+    <div class="asset-tree-panel">
+      <div class="asset-tree-header">🏭 Asset Hierarchy</div>
+      <div class="asset-tree-body" id="p3-tree-body">
+        <!-- Rendered by JS -->
+      </div>
+    </div>
+
+    <!-- Right: Plan Hierarchy -->
+    <div class="split-right">
+      <div class="split-right-header">
+        <div class="title" id="p3-panel-title">Maintenance Plans — C01 Feed Gas Compression</div>
+        <div class="sub" id="p3-panel-sub">3 plans · 13 items</div>
+      </div>
+      <div class="split-right-body">
+        <div class="plan-hier-scroll" id="p3-plan-hier">
+          <!-- Rendered by JS -->
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="divider"></div>
+  <div class="flex justify-between">
+    <button class="btn btn-outline" onclick="showPage(1)">‹ Back</button>
+    <button class="btn btn-primary" onclick="showPage(3)">Proceed to Export &nbsp;›</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<!-- PAGE 4 — EXPORT                                         -->
+<!-- ════════════════════════════════════════════════════════ -->
+<div class="page" id="page3">
+
+  <div class="progress-strip">
+    <div class="ps-step"><div class="ps-dot done">✓</div><div class="ps-label done">Ingest</div></div>
+    <div class="ps-line done"></div>
+    <div class="ps-step"><div class="ps-dot done">✓</div><div class="ps-label done">Rules</div></div>
+    <div class="ps-line done"></div>
+    <div class="ps-step"><div class="ps-dot done">✓</div><div class="ps-label done">Build</div></div>
+    <div class="ps-line done"></div>
+    <div class="ps-step"><div class="ps-dot active">4</div><div class="ps-label active">Export</div></div>
+  </div>
+
+  <div class="summary-bar mb-20">
+    <div class="s-item"><div class="s-val">42</div><div class="s-lbl">Plans</div></div>
+    <div class="s-sep"></div>
+    <div class="s-item"><div class="s-val">186</div><div class="s-lbl">Items</div></div>
+    <div class="s-sep"></div>
+    <div class="s-item"><div class="s-val">1,000</div><div class="s-lbl">Operations</div></div>
+    <div class="s-sep"></div>
+    <div class="s-item"><div class="s-val">0</div><div class="s-lbl" style="color:var(--green)">Unassigned Tasks</div></div>
+    <div class="s-sep"></div>
+    <div class="s-item"><div class="s-val">100%</div><div class="s-lbl" style="color:var(--green)">Coverage</div></div>
+  </div>
+
+  <div class="grid-2 gap">
+
+    <div>
+      <div class="section-title">Output Format <div class="line"></div></div>
+
+      <div class="export-option selected">
+        <div class="export-radio"></div>
+        <div>
+          <div class="export-title">Data Mate Staging Template</div>
+          <div class="export-desc">SAP-compatible upload workbook. Populates Plan, Item, Task List and Operation tabs ready for max-load into S/4HANA.</div>
+          <div class="export-ext">.xlsx</div>
+        </div>
+      </div>
+
+      <div class="export-option">
+        <div class="export-radio"></div>
+        <div>
+          <div class="export-title">Flat CSV Bundle</div>
+          <div class="export-desc">Separate CSVs for Maintenance Plans, Items, Task Lists and Operations. Good for further processing or QA review.</div>
+          <div class="export-ext">.zip → 4× .csv</div>
+        </div>
+      </div>
+
+      <div class="export-option">
+        <div class="export-radio"></div>
+        <div>
+          <div class="export-title">Full JSON (ERD Structure)</div>
+          <div class="export-desc">Structured JSON matching the data model — suitable for API ingestion or downstream system integration.</div>
+          <div class="export-ext">.json</div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="section-title">Include <div class="line"></div></div>
+      <div class="checkbox-row"><input type="checkbox" checked /> Maintenance Plans &amp; Items</div>
+      <div class="checkbox-row"><input type="checkbox" checked /> Task Lists &amp; Operations</div>
+      <div class="checkbox-row"><input type="checkbox" checked /> Planner Group &amp; Work Centre assignments</div>
+      <div class="checkbox-row"><input type="checkbox" checked /> FMECA traceability (source row references)</div>
+      <div class="checkbox-row"><input type="checkbox" /> Rule audit trail (which rule created each item)</div>
+    </div>
+
+    <div>
+      <div class="section-title">Export Preview <div class="line"></div></div>
+      <div class="card mb-16">
+        <div class="card-title"><div class="dot"></div>Data Mate — Sheet: MAINTENANCE PLAN</div>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Plan ID</th><th>Description</th><th>Planner Grp</th><th>Work Centre</th><th>FLOC</th></tr></thead>
+            <tbody>
+              <tr><td>PM-LNG1-C01-00001</td><td>Feed Gas Compression — 6M MECH</td><td>PG-MECH</td><td>MECH-ROT</td><td>LNG1-C01</td></tr>
+              <tr><td>PM-LNG1-C01-00002</td><td>Feed Gas Compression — 12M MECH</td><td>PG-MECH</td><td>MECH-ROT</td><td>LNG1-C01</td></tr>
+              <tr><td>PM-LNG1-C01-00003</td><td>Feed Gas Compression — INSTR</td><td>PG-INSTR</td><td>INST</td><td>LNG1-C01</td></tr>
+              <tr><td style="color:var(--muted)" colspan="5">… 39 more rows</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card mb-16">
+        <div class="card-title"><div class="dot"></div>Data Mate — Sheet: MAINTENANCE ITEM</div>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Item ID</th><th>Plan ID</th><th>Freq</th><th>Unit</th><th>Task List</th></tr></thead>
+            <tbody>
+              <tr><td>MI-LNG1-C01-K001A-001</td><td>PM-LNG1-C01-00001</td><td>6</td><td>M</td><td>TL-001</td></tr>
+              <tr><td>MI-LNG1-C01-K001A-002</td><td>PM-LNG1-C01-00001</td><td>6</td><td>M</td><td>TL-002</td></tr>
+              <tr><td style="color:var(--muted)" colspan="5">… 184 more rows</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="alert alert-green" style="margin-bottom:16px">✓ All validations passed — ready for SAP load</div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;font-size:15px;padding:12px">⬇ Download Data Mate Template</button>
+    </div>
+
+  </div>
+
+  <div class="divider"></div>
+  <div class="flex justify-between">
+    <button class="btn btn-outline" onclick="showPage(2)">‹ Back</button>
+    <div class="text-muted text-sm" style="line-height:36px">Generated 16 Apr 2026 · LNG Train 1 &amp; 2 · 1,000 tasks · 42 plans</div>
+  </div>
+</div>
+
+</div><!-- /main -->
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// DATA MODEL — shared hierarchy for pages 1 and 3
+// ════════════════════════════════════════════════════════════════
+
+const HIERARCHY = {
+  id: 'lng1',
+  icon: '🏭',
+  label: 'LNG Train 1',
+  tasks: 1000,
+  expanded: true,
+  children: [
+    {
+      id: 'c01',
+      icon: '🔧',
+      label: 'C01 — Feed Gas Compression',
+      tasks: 220,
+      expanded: true,
+      children: [
+        { id: 'k001a', icon: '⚙️', label: 'K001A Feed Gas Compressor A', tasks: 48 },
+        { id: 'k001b', icon: '⚙️', label: 'K001B Feed Gas Compressor B', tasks: 46 },
+        { id: 'k002',  icon: '⚙️', label: 'K002 Booster Compressor',     tasks: 38 },
+        { id: 'k003',  icon: '⚙️', label: 'K003 Gas Cooler',             tasks: 22 },
+        { id: 'c01more', icon: null, label: '+ 18 more FLOCs…', tasks: null, isMore: true }
+      ]
+    },
+    {
+      id: 'c02',
+      icon: '🧪',
+      label: 'C02 — Acid Gas Removal',
+      tasks: 160,
+      expanded: false,
+      children: [
+        { id: 'v001',   icon: '⚙️', label: 'V001 Absorber Column',  tasks: 32 },
+        { id: 'p001ab', icon: '⚙️', label: 'P001A/B Amine Pump',    tasks: 28 },
+        { id: 'c02more', icon: null, label: '+ 6 more FLOCs…', tasks: null, isMore: true }
+      ]
+    },
+    {
+      id: 'e01',
+      icon: '⚡',
+      label: 'E01 — Electrical Distribution',
+      tasks: 140,
+      expanded: false,
+      children: [
+        { id: 't001',   icon: '⚙️', label: 'T001 Main Transformer', tasks: 24 },
+        { id: 'e01more', icon: null, label: '+ 4 more FLOCs…', tasks: null, isMore: true }
+      ]
+    },
+    {
+      id: 'i01',
+      icon: '📡',
+      label: 'I01 — Instrumentation & Control',
+      tasks: 180,
+      expanded: false,
+      children: [
+        { id: 'plc001', icon: '⚙️', label: 'PLC001 Process Controller', tasks: 22 },
+        { id: 'i01more', icon: null, label: '+ 8 more FLOCs…', tasks: null, isMore: true }
+      ]
+    },
+    {
+      id: 'u01',
+      icon: '🔩',
+      label: 'U01 — Utilities',
+      tasks: 120,
+      expanded: false,
+      children: [
+        { id: 'u01more', icon: null, label: '+ 5 more FLOCs…', tasks: null, isMore: true }
+      ]
+    },
+    { id: 'sys-more', icon: null, label: '+ 5 more systems…', tasks: null, isMore: true }
+  ]
+};
+
+// ════════════════════════════════════════════════════════════════
+// TASK DATA for page 1 (keyed by node ID)
+// ════════════════════════════════════════════════════════════════
+
+const TASK_DATA = {
+  lng1: {
+    title: 'Tasks — LNG Train 1',
+    sub: '1,000 tasks',
+    rows: [
+      ['K001A', 'Vibration analysis (online trending)', 'CBM', '1M', '1.0', 'PG-MECH', 'Yes', 'High'],
+      ['K001A', 'Bearing inspection & lubrication', 'PM', '6M', '4.0', 'PG-MECH', 'Yes', 'High'],
+      ['K001B', 'Coupling alignment check', 'Inspection', '6M', '2.0', 'PG-MECH', 'Yes', 'Medium'],
+      ['K002', 'Seal inspection & replacement', 'PM', '12M', '6.0', 'PG-MECH', 'No', 'High'],
+      ['K003', 'Gas cooler tube inspection', 'Inspection', '12M', '3.5', 'PG-MECH', 'No', 'Medium'],
+      ['V001', 'Absorber column internal inspection', 'Inspection', 'Annual', '8.0', 'PG-INSP', 'No', 'High'],
+      ['T001', 'Transformer oil sampling', 'PdM', '3M', '1.0', 'PG-ELEC', 'Yes', 'Medium'],
+      ['PLC001', 'Control loop calibration check', 'Inspection', '6M', '2.5', 'PG-INSTR', 'Yes', 'High'],
+    ]
+  },
+  c01: {
+    title: 'Tasks — C01 Feed Gas Compression',
+    sub: '220 tasks',
+    rows: [
+      ['K001A', 'Vibration analysis (online trending)', 'CBM', '1M', '1.0', 'PG-MECH', 'Yes', 'High'],
+      ['K001A', 'Bearing inspection & lubrication', 'PM', '6M', '4.0', 'PG-MECH', 'Yes', 'High'],
+      ['K001A', 'Seal inspection & replacement', 'PM', '12M', '6.0', 'PG-MECH', 'No', 'High'],
+      ['K001A', 'Coupling alignment check', 'Inspection', '6M', '2.0', 'PG-MECH', 'Yes', 'Medium'],
+      ['K001A', 'Lube oil top-up & inspection', 'PM', '1M', '1.0', 'PG-MECH', 'Yes', 'Medium'],
+      ['K001B', 'Vibration analysis (online trending)', 'CBM', '1M', '1.0', 'PG-MECH', 'Yes', 'High'],
+      ['K001B', 'Bearing inspection & lubrication', 'PM', '6M', '4.0', 'PG-MECH', 'Yes', 'High'],
+      ['K002', 'Booster compressor valve inspection', 'Inspection', '6M', '3.0', 'PG-MECH', 'No', 'High'],
+    ]
+  },
+  k001a: {
+    title: 'Tasks — K001A Feed Gas Compressor A',
+    sub: '48 tasks',
+    rows: [
+      ['K001A', 'Vibration analysis (online trending)', 'CBM', '1M', '1.0', 'PG-MECH', 'Yes', 'High'],
+      ['K001A', 'Bearing inspection & lubrication', 'PM', '6M', '4.0', 'PG-MECH', 'Yes', 'High'],
+      ['K001A', 'Lube oil analysis', 'PdM', '3M', '1.5', 'PG-MECH', 'Yes', 'Medium'],
+      ['K001A', 'Seal inspection & replacement', 'PM', '12M', '6.0', 'PG-MECH', 'No', 'High'],
+      ['K001A', 'Coupling alignment check', 'Inspection', '6M', '2.0', 'PG-MECH', 'Yes', 'Medium'],
+      ['K001A', 'Lube oil top-up & inspection', 'PM', '1M', '1.0', 'PG-MECH', 'Yes', 'Medium'],
+      ['K001A', 'Inlet filter differential pressure check', 'Inspection', '1M', '0.5', 'PG-MECH', 'Yes', 'Low'],
+      ['K001A', 'Safety valve functional test', 'Inspection', 'Annual', '2.0', 'PG-INSP', 'No', 'High'],
+    ]
+  },
+  k001b: {
+    title: 'Tasks — K001B Feed Gas Compressor B',
+    sub: '46 tasks',
+    rows: [
+      ['K001B', 'Vibration analysis (online trending)', 'CBM', '1M', '1.0', 'PG-MECH', 'Yes', 'High'],
+      ['K001B', 'Bearing inspection & lubrication', 'PM', '6M', '4.0', 'PG-MECH', 'Yes', 'High'],
+      ['K001B', 'Lube oil analysis', 'PdM', '3M', '1.5', 'PG-MECH', 'Yes', 'Medium'],
+      ['K001B', 'Seal inspection & replacement', 'PM', '12M', '6.0', 'PG-MECH', 'No', 'High'],
+      ['K001B', 'Coupling alignment check', 'Inspection', '6M', '2.0', 'PG-MECH', 'Yes', 'Medium'],
+      ['K001B', 'Lube oil top-up & inspection', 'PM', '1M', '1.0', 'PG-MECH', 'Yes', 'Medium'],
+    ]
+  },
+  k002: {
+    title: 'Tasks — K002 Booster Compressor',
+    sub: '38 tasks',
+    rows: [
+      ['K002', 'Booster compressor valve inspection', 'Inspection', '6M', '3.0', 'PG-MECH', 'No', 'High'],
+      ['K002', 'Vibration analysis', 'CBM', '1M', '1.0', 'PG-MECH', 'Yes', 'High'],
+      ['K002', 'Bearing lubrication', 'PM', '3M', '1.5', 'PG-MECH', 'Yes', 'Medium'],
+      ['K002', 'Lube oil change', 'PM', '12M', '4.0', 'PG-MECH', 'No', 'Medium'],
+    ]
+  },
+  k003: {
+    title: 'Tasks — K003 Gas Cooler',
+    sub: '22 tasks',
+    rows: [
+      ['K003', 'Gas cooler tube inspection', 'Inspection', '12M', '3.5', 'PG-MECH', 'No', 'Medium'],
+      ['K003', 'Fin fan blade inspection', 'Inspection', '6M', '2.0', 'PG-MECH', 'Yes', 'Low'],
+      ['K003', 'Motor bearing lubrication', 'PM', '6M', '1.0', 'PG-MECH', 'Yes', 'Medium'],
+    ]
+  },
+  c02: {
+    title: 'Tasks — C02 Acid Gas Removal',
+    sub: '160 tasks',
+    rows: [
+      ['V001', 'Absorber column internal inspection', 'Inspection', 'Annual', '8.0', 'PG-INSP', 'No', 'High'],
+      ['V001', 'Column pressure test', 'Inspection', '5Y', '12.0', 'PG-INSP', 'No', 'High'],
+      ['P001A', 'Amine pump seal inspection', 'PM', '6M', '2.0', 'PG-MECH', 'No', 'Medium'],
+      ['P001B', 'Amine pump seal inspection', 'PM', '6M', '2.0', 'PG-MECH', 'No', 'Medium'],
+    ]
+  },
+  v001: {
+    title: 'Tasks — V001 Absorber Column',
+    sub: '32 tasks',
+    rows: [
+      ['V001', 'Absorber column internal inspection', 'Inspection', 'Annual', '8.0', 'PG-INSP', 'No', 'High'],
+      ['V001', 'Column pressure test', 'Inspection', '5Y', '12.0', 'PG-INSP', 'No', 'High'],
+      ['V001', 'Tray fouling check', 'Inspection', '2Y', '4.0', 'PG-INSP', 'No', 'Medium'],
+    ]
+  },
+  p001ab: {
+    title: 'Tasks — P001A/B Amine Pump',
+    sub: '28 tasks',
+    rows: [
+      ['P001A', 'Amine pump seal inspection', 'PM', '6M', '2.0', 'PG-MECH', 'No', 'Medium'],
+      ['P001B', 'Amine pump seal inspection', 'PM', '6M', '2.0', 'PG-MECH', 'No', 'Medium'],
+      ['P001A', 'Vibration analysis', 'CBM', '1M', '0.5', 'PG-MECH', 'Yes', 'Medium'],
+    ]
+  },
+  e01: {
+    title: 'Tasks — E01 Electrical Distribution',
+    sub: '140 tasks',
+    rows: [
+      ['T001', 'Transformer oil sampling', 'PdM', '3M', '1.0', 'PG-ELEC', 'Yes', 'Medium'],
+      ['T001', 'Insulation resistance test', 'Inspection', '2Y', '4.0', 'PG-ELEC', 'No', 'High'],
+      ['T001', 'Transformer tap changer inspection', 'Inspection', 'Annual', '3.0', 'PG-ELEC', 'No', 'High'],
+    ]
+  },
+  t001: {
+    title: 'Tasks — T001 Main Transformer',
+    sub: '24 tasks',
+    rows: [
+      ['T001', 'Transformer oil sampling', 'PdM', '3M', '1.0', 'PG-ELEC', 'Yes', 'Medium'],
+      ['T001', 'Insulation resistance test', 'Inspection', '2Y', '4.0', 'PG-ELEC', 'No', 'High'],
+      ['T001', 'Transformer tap changer inspection', 'Inspection', 'Annual', '3.0', 'PG-ELEC', 'No', 'High'],
+      ['T001', 'Oil filtration & top-up', 'PM', '6M', '2.0', 'PG-ELEC', 'Yes', 'Medium'],
+    ]
+  },
+  i01: {
+    title: 'Tasks — I01 Instrumentation & Control',
+    sub: '180 tasks',
+    rows: [
+      ['PLC001', 'Control loop calibration check', 'Inspection', '6M', '2.5', 'PG-INSTR', 'Yes', 'High'],
+      ['PLC001', 'Safety instrumented function test', 'Inspection', 'Annual', '4.0', 'PG-INSTR', 'No', 'High'],
+    ]
+  },
+  plc001: {
+    title: 'Tasks — PLC001 Process Controller',
+    sub: '22 tasks',
+    rows: [
+      ['PLC001', 'Control loop calibration check', 'Inspection', '6M', '2.5', 'PG-INSTR', 'Yes', 'High'],
+      ['PLC001', 'Safety instrumented function test', 'Inspection', 'Annual', '4.0', 'PG-INSTR', 'No', 'High'],
+      ['PLC001', 'Firmware version check', 'Inspection', '6M', '0.5', 'PG-INSTR', 'Yes', 'Medium'],
+    ]
+  },
+  u01: {
+    title: 'Tasks — U01 Utilities',
+    sub: '120 tasks',
+    rows: [
+      ['U01', 'Cooling water flow check', 'Inspection', '1M', '0.5', 'PG-MECH', 'Yes', 'Low'],
+      ['U01', 'Steam trap inspection', 'Inspection', '6M', '1.0', 'PG-MECH', 'Yes', 'Medium'],
+    ]
+  }
+};
+
+// ════════════════════════════════════════════════════════════════
+// PLAN DATA for page 3 (keyed by node ID)
+// ════════════════════════════════════════════════════════════════
+
+const PLAN_DATA = {
+  c01: {
+    title: 'Maintenance Plans — C01 Feed Gas Compression',
+    sub: '3 plans · 13 items',
+    plans: [
+      {
+        id: 'PM-LNG1-C01-00001',
+        label: 'Feed Gas Compression — 6M MECH',
+        itemCount: 6,
+        expanded: true,
+        items: [
+          {
+            id: 'MI-001', label: '6M · MECH-ROT · Online', tl: 'TL-001',
+            expanded: true,
+            ops: [
+              { num: '010', desc: 'Bearing inspection & lubrication', hrs: '4.0h', type: 'PM' },
+              { num: '020', desc: 'Coupling alignment check',          hrs: '2.0h', type: 'Inspection' },
+              { num: '030', desc: 'Lube oil top-up & inspection',      hrs: '1.0h', type: 'PM' },
+            ]
+          },
+          { id: 'MI-002', label: '6M · MECH-ROT · SHTDN',   tl: 'TL-002', expanded: false, ops: [] },
+          { id: 'MI-003', label: '12M · MECH-ROT · SHTDN',  tl: 'TL-003', expanded: false, ops: [] },
+          { id: 'MI-004', label: '1M · INST · Online',       tl: 'TL-004', expanded: false, ops: [] },
+          { id: 'MI-005', label: '3M · INST · Online',       tl: 'TL-005', expanded: false, ops: [] },
+          { id: 'MI-006', label: 'REG · INSP · SHTDN  ⚠️ Regulatory', tl: 'TL-006', expanded: false, ops: [], regulatory: true },
+        ]
+      },
+      {
+        id: 'PM-LNG1-C01-00002',
+        label: 'Feed Gas Compression — 12M ELEC',
+        itemCount: 3,
+        expanded: false,
+        items: []
+      },
+      {
+        id: 'PM-LNG1-C01-00003',
+        label: 'Feed Gas Compression — INST PdM',
+        itemCount: 4,
+        expanded: false,
+        items: []
+      }
+    ]
+  },
+  k001a: {
+    title: 'Maintenance Plans — K001A Feed Gas Compressor A',
+    sub: '2 plans · 5 items',
+    plans: [
+      {
+        id: 'PM-LNG1-C01-K001A-001',
+        label: 'K001A — 6M MECH-ROT',
+        itemCount: 3,
+        expanded: true,
+        items: [
+          {
+            id: 'MI-K1A-001', label: '6M · MECH-ROT · Online', tl: 'TL-K1A-001',
+            expanded: true,
+            ops: [
+              { num: '010', desc: 'Bearing inspection & lubrication', hrs: '4.0h', type: 'PM' },
+              { num: '020', desc: 'Coupling alignment check',          hrs: '2.0h', type: 'Inspection' },
+              { num: '030', desc: 'Lube oil top-up & inspection',      hrs: '1.0h', type: 'PM' },
+            ]
+          },
+          { id: 'MI-K1A-002', label: '12M · MECH-ROT · SHTDN', tl: 'TL-K1A-002', expanded: false, ops: [] },
+          { id: 'MI-K1A-003', label: 'REG · INSP · SHTDN  ⚠️ Regulatory', tl: 'TL-K1A-003', expanded: false, ops: [], regulatory: true },
+        ]
+      },
+      {
+        id: 'PM-LNG1-C01-K001A-002',
+        label: 'K001A — PdM / CBM',
+        itemCount: 2,
+        expanded: false,
+        items: []
+      }
+    ]
+  }
+};
+
+// Fallback for nodes without specific plan data
+function getDefaultPlanData(nodeId, label) {
+  return {
+    title: 'Maintenance Plans — ' + label,
+    sub: 'Select a sub-system node to see plans',
+    plans: []
+  };
+}
+
+// ════════════════════════════════════════════════════════════════
+// PAGE NAVIGATION
+// ════════════════════════════════════════════════════════════════
+
+function showPage(n) {
+  document.querySelectorAll('.page').forEach((p, i) => p.classList.toggle('active', i === n));
+  document.querySelectorAll('.tabbar .tab').forEach((t, i) => {
+    t.classList.remove('active', 'done');
+    if (i === n) t.classList.add('active');
+    else if (i < n) t.classList.add('done');
+  });
+}
+
+// ════════════════════════════════════════════════════════════════
+// HIERARCHY TREE RENDERER (used on both pages)
+// ════════════════════════════════════════════════════════════════
+
+function renderTree(containerEl, node, selectedId, onSelect, isRoot) {
+  containerEl.innerHTML = '';
+
+  // Root row
+  const rootRow = document.createElement('div');
+  rootRow.className = 'ht-root-row';
+  rootRow.innerHTML = `<span style="font-size:15px">${node.icon}</span><span style="flex:1">${node.label}</span><span class="ht-count">${node.tasks.toLocaleString()} tasks</span>`;
+  rootRow.addEventListener('click', () => onSelect(node.id, node.label, node.tasks));
+  containerEl.appendChild(rootRow);
+
+  if (node.children) {
+    const childWrap = document.createElement('div');
+    childWrap.style.paddingLeft = '4px';
+    renderChildren(childWrap, node.children, selectedId, onSelect, node);
+    containerEl.appendChild(childWrap);
+  }
+}
+
+function renderChildren(container, children, selectedId, onSelect, parentNode) {
+  children.forEach(child => {
+    if (child.isMore) {
+      const more = document.createElement('div');
+      more.className = 'ht-more';
+      more.textContent = child.label;
+      container.appendChild(more);
+      return;
+    }
+
+    const nodeEl = document.createElement('div');
+    nodeEl.className = 'ht-node';
+
+    const hasChildren = child.children && child.children.length > 0;
+    const isExpanded = !!child.expanded;
+
+    const row = document.createElement('div');
+    row.className = 'ht-row' + (child.id === selectedId ? ' selected' : '');
+    row.innerHTML = `
+      <span class="ht-caret ${hasChildren ? (isExpanded ? 'open' : '') : 'leaf'}">▶</span>
+      <span class="ht-icon">${child.icon || ''}</span>
+      <span class="ht-label">${child.label}</span>
+      ${child.tasks !== null ? `<span class="ht-count">${child.tasks}</span>` : ''}
+    `;
+
+    let childContainer = null;
+    if (hasChildren) {
+      childContainer = document.createElement('div');
+      childContainer.className = 'ht-children';
+      childContainer.style.display = isExpanded ? 'block' : 'none';
+      renderChildren(childContainer, child.children, selectedId, onSelect, child);
+    }
+
+    row.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (hasChildren) {
+        child.expanded = !child.expanded;
+        const caret = row.querySelector('.ht-caret');
+        if (child.expanded) {
+          caret.classList.add('open');
+          childContainer.style.display = 'block';
+        } else {
+          caret.classList.remove('open');
+          childContainer.style.display = 'none';
+        }
+      }
+      onSelect(child.id, child.label, child.tasks);
+    });
+
+    nodeEl.appendChild(row);
+    if (childContainer) nodeEl.appendChild(childContainer);
+    container.appendChild(nodeEl);
+  });
+}
+
+// ════════════════════════════════════════════════════════════════
+// PAGE 1 — task table rendering
+// ════════════════════════════════════════════════════════════════
+
+const PILL_MAP = {
+  'CBM':        'pill-blue',
+  'PM':         'pill-gray',
+  'PdM':        'pill-purple',
+  'Inspection': 'pill-green',
+  'High':       'pill-red',
+  'Medium':     'pill-amber',
+  'Low':        'pill-green',
+};
+
+function pillHtml(text) {
+  return `<span class="pill ${PILL_MAP[text] || 'pill-gray'}">${text}</span>`;
+}
+
+let p1Selected = 'c01';
+
+function p1SelectNode(id, label, tasks) {
+  p1Selected = id;
+  const data = TASK_DATA[id] || TASK_DATA['c01'];
+
+  document.getElementById('p1-panel-title').textContent = data.title;
+  document.getElementById('p1-panel-sub').textContent   = data.sub;
+
+  const tbody = document.getElementById('p1-task-tbody');
+  tbody.innerHTML = data.rows.map(r => `
+    <tr>
+      <td style="font-family:monospace;font-size:12px;color:var(--muted)">${r[0]}</td>
+      <td>${r[1]}</td>
+      <td>${pillHtml(r[2])}</td>
+      <td style="font-family:monospace">${r[3]}</td>
+      <td style="text-align:right">${r[4]}</td>
+      <td style="font-size:12px;color:var(--muted)">${r[5]}</td>
+      <td>${r[6] === 'Yes' ? '<span style="color:var(--green)">●</span> Yes' : '<span style="color:var(--muted)">○</span> No'}</td>
+      <td>${pillHtml(r[7])}</td>
+    </tr>
+  `).join('');
+
+  // Re-render tree to update selection highlight
+  renderTree(
+    document.getElementById('p1-tree-body'),
+    HIERARCHY,
+    p1Selected,
+    p1SelectNode,
+    true
+  );
+}
+
+// ════════════════════════════════════════════════════════════════
+// PAGE 3 — plan hierarchy rendering
+// ════════════════════════════════════════════════════════════════
+
+let p3Selected = 'c01';
+
+function p3SelectNode(id, label, tasks) {
+  p3Selected = id;
+
+  const data = PLAN_DATA[id] || getDefaultPlanData(id, label);
+
+  document.getElementById('p3-panel-title').textContent = data.title;
+  document.getElementById('p3-panel-sub').textContent   = data.sub;
+
+  renderPlanHier(document.getElementById('p3-plan-hier'), data.plans);
+
+  // Re-render tree to update selection highlight
+  renderTree(
+    document.getElementById('p3-tree-body'),
+    HIERARCHY,
+    p3Selected,
+    p3SelectNode,
+    true
+  );
+}
+
+function renderPlanHier(container, plans) {
+  container.innerHTML = '';
+
+  if (!plans || plans.length === 0) {
+    container.innerHTML = '<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px">No plans generated for this selection.</div>';
+    return;
+  }
+
+  plans.forEach(plan => {
+    const planEl = document.createElement('div');
+    planEl.className = 'ph-plan';
+
+    // Plan header row
+    const planRow = document.createElement('div');
+    planRow.className = 'ph-plan-row';
+    planRow.innerHTML = `
+      <span class="ph-plan-icon">📁</span>
+      <span class="ph-plan-label">${plan.id} · ${plan.label}</span>
+      <span class="ph-plan-badge">${plan.itemCount} items</span>
+      <span class="ph-toggle">${plan.expanded ? '▼' : '►'}</span>
+    `;
+
+    const itemsContainer = document.createElement('div');
+    itemsContainer.className = 'ph-items';
+    itemsContainer.style.display = plan.expanded ? 'block' : 'none';
+
+    planRow.addEventListener('click', () => {
+      plan.expanded = !plan.expanded;
+      planRow.querySelector('.ph-toggle').textContent = plan.expanded ? '▼' : '►';
+      itemsContainer.style.display = plan.expanded ? 'block' : 'none';
+    });
+
+    planEl.appendChild(planRow);
+
+    if (plan.items && plan.items.length > 0) {
+      plan.items.forEach(item => {
+        const itemRow = document.createElement('div');
+        itemRow.className = 'ph-item-row';
+        itemRow.innerHTML = `
+          <span class="ph-item-icon">${item.regulatory ? '⚠️' : '📋'}</span>
+          <span class="ph-item-label" style="${item.regulatory ? 'color:var(--red)' : ''}">${item.id} · ${item.label}</span>
+          <span class="ph-item-tl">[${item.tl}]</span>
+          <span class="ph-item-toggle">${item.expanded ? '▼' : '►'}</span>
+        `;
+
+        const tlContainer = document.createElement('div');
+        tlContainer.style.display = item.expanded ? 'block' : 'none';
+
+        if (item.ops && item.ops.length > 0) {
+          // Task List row
+          const tlRow = document.createElement('div');
+          tlRow.className = 'ph-tasklist-row';
+          tlRow.innerHTML = `
+            <span>📃</span>
+            <span class="ph-tl-label">TL-LNG1-${p3Selected.toUpperCase()}-${item.id.replace('MI-', '')}</span>
+            <span class="ph-tl-toggle">▼</span>
+          `;
+
+          const opsContainer = document.createElement('div');
+          opsContainer.className = 'ph-operations';
+
+          item.ops.forEach(op => {
+            const opRow = document.createElement('div');
+            opRow.className = 'ph-op-row';
+            opRow.innerHTML = `
+              <span class="ph-op-num">${op.num}</span>
+              <span class="ph-op-desc">${op.desc}</span>
+              <span class="ph-op-hours">${op.hrs}</span>
+              <span class="pill ${PILL_MAP[op.type] || 'pill-gray'}" style="font-size:10px">${op.type}</span>
+            `;
+            opsContainer.appendChild(opRow);
+          });
+
+          tlContainer.appendChild(tlRow);
+          tlContainer.appendChild(opsContainer);
+        }
+
+        itemRow.addEventListener('click', () => {
+          item.expanded = !item.expanded;
+          itemRow.querySelector('.ph-item-toggle').textContent = item.expanded ? '▼' : '►';
+          tlContainer.style.display = item.expanded ? 'block' : 'none';
+        });
+
+        itemsContainer.appendChild(itemRow);
+        itemsContainer.appendChild(tlContainer);
+      });
+    }
+
+    planEl.appendChild(itemsContainer);
+    container.appendChild(planEl);
+  });
+}
+
+// ════════════════════════════════════════════════════════════════
+// EXPORT OPTION CLICK
+// ════════════════════════════════════════════════════════════════
+
+document.querySelectorAll('.export-option').forEach(opt => {
+  opt.addEventListener('click', () => {
+    document.querySelectorAll('.export-option').forEach(o => o.classList.remove('selected'));
+    opt.classList.add('selected');
+  });
+});
+
+// ════════════════════════════════════════════════════════════════
+// INIT — render both trees and default panels on load
+// ════════════════════════════════════════════════════════════════
+
+renderTree(
+  document.getElementById('p1-tree-body'),
+  HIERARCHY,
+  p1Selected,
+  p1SelectNode,
+  true
+);
+p1SelectNode('c01', 'C01 Feed Gas Compression', 220);
+
+renderTree(
+  document.getElementById('p3-tree-body'),
+  HIERARCHY,
+  p3Selected,
+  p3SelectNode,
+  true
+);
+p3SelectNode('c01', 'C01 Feed Gas Compression', 220);
+</script>
+</body>
+</html>
