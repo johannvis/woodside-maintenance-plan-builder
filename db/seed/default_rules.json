@@ -1,0 +1,30 @@
+{
+  "name": "LNG Train Standard",
+  "description": "Default packaging rules for LNG Train maintenance plans",
+  "rules": [
+    {
+      "rule_type": "grouping_level",
+      "description": "Group tasks by asset hierarchy level (1=Train, 2=System, 3=Sub-system, 4=Equipment)",
+      "parameter_key": "level",
+      "parameter_value": "3"
+    },
+    {
+      "rule_type": "max_duration",
+      "description": "Split task list items when total duration exceeds cap",
+      "parameter_key": "max_hours",
+      "parameter_value": "8"
+    },
+    {
+      "rule_type": "shutdown_separation",
+      "description": "Separate online and offline (shutdown) tasks into different items",
+      "parameter_key": "enabled",
+      "parameter_value": "true"
+    },
+    {
+      "rule_type": "regulatory_isolation",
+      "description": "Isolate regulatory/statutory tasks into dedicated plan items",
+      "parameter_key": "enabled",
+      "parameter_value": "true"
+    }
+  ]
+}
