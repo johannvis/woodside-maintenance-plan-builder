@@ -84,8 +84,6 @@ def render():
 
     st.divider()
 
-    # ── Asset hierarchy tree ──────────────────────────────────────────────────
-    st.subheader("Asset Hierarchy")
     session = get_session()
     try:
         trains = (
@@ -97,77 +95,77 @@ def render():
             .all()
         )
 
-        selected_floc_id = None
+        # ── Side-by-side: hierarchy left, tasks right ─────────────────────────
+        col_tree, col_tasks = st.columns([1, 2])
 
-        for train in trains:
-            with st.expander(f"🏭 {train.name}", expanded=len(trains) == 1):
-                systems = (
-                    session.query(FunctionalLocation)
-                    .filter(FunctionalLocation.parent_id == train.id)
+        with col_tree:
+            st.subheader("Asset Hierarchy")
+            for train in trains:
+                with st.expander(f"🏭 {train.name}", expanded=len(trains) == 1):
+                    systems = (
+                        session.query(FunctionalLocation)
+                        .filter(FunctionalLocation.parent_id == train.id)
+                        .all()
+                    )
+                    for system in systems:
+                        with st.expander(f"⚙️ {system.name}"):
+                            subsystems = (
+                                session.query(FunctionalLocation)
+                                .filter(FunctionalLocation.parent_id == system.id)
+                                .all()
+                            )
+                            for sub in subsystems:
+                                task_count_sub = (
+                                    session.query(Task)
+                                    .join(FailureMode)
+                                    .join(FunctionalLocation)
+                                    .filter(
+                                        (FunctionalLocation.id == sub.id) |
+                                        (FunctionalLocation.parent_id == sub.id)
+                                    )
+                                    .count()
+                                )
+                                btn_label = f"📦 {sub.name} ({task_count_sub})"
+                                if st.button(btn_label, key=f"floc_{sub.id}", use_container_width=True):
+                                    st.session_state["selected_floc_id"] = sub.id
+
+        with col_tasks:
+            selected_floc = st.session_state.get("selected_floc_id")
+            if not selected_floc:
+                st.info("← Select a node in the hierarchy to see its tasks.")
+            else:
+                floc = session.get(FunctionalLocation, selected_floc)
+                tasks_q = (
+                    session.query(Task, FailureMode, FunctionalLocation)
+                    .join(FailureMode, Task.failure_mode_id == FailureMode.id)
+                    .join(FunctionalLocation, FailureMode.functional_location_id == FunctionalLocation.id)
+                    .filter(
+                        (FunctionalLocation.id == selected_floc) |
+                        (FunctionalLocation.parent_id == selected_floc)
+                    )
+                    .limit(200)
                     .all()
                 )
-                for system in systems:
-                    with st.expander(f"  ⚙️ {system.name}"):
-                        subsystems = (
-                            session.query(FunctionalLocation)
-                            .filter(FunctionalLocation.parent_id == system.id)
-                            .all()
-                        )
-                        for sub in subsystems:
-                            equip_count = (
-                                session.query(FunctionalLocation)
-                                .filter(FunctionalLocation.parent_id == sub.id)
-                                .count()
-                            )
-                            task_count_sub = (
-                                session.query(Task)
-                                .join(FailureMode)
-                                .join(FunctionalLocation)
-                                .filter(
-                                    (FunctionalLocation.id == sub.id) |
-                                    (FunctionalLocation.parent_id == sub.id)
-                                )
-                                .count()
-                            )
-                            btn_label = f"📦 {sub.name} ({task_count_sub} tasks)"
-                            if st.button(btn_label, key=f"floc_{sub.id}"):
-                                st.session_state["selected_floc_id"] = sub.id
-
-        st.divider()
-
-        # ── Sample task table ──────────────────────────────────────────────────
-        selected_floc = st.session_state.get("selected_floc_id")
-        if selected_floc:
-            floc = session.get(FunctionalLocation, selected_floc)
-            st.subheader(f"Tasks under: {floc.name if floc else selected_floc}")
-            tasks_q = (
-                session.query(Task, FailureMode, FunctionalLocation)
-                .join(FailureMode, Task.failure_mode_id == FailureMode.id)
-                .join(FunctionalLocation, FailureMode.functional_location_id == FunctionalLocation.id)
-                .filter(
-                    (FunctionalLocation.id == selected_floc) |
-                    (FunctionalLocation.parent_id == selected_floc)
-                )
-                .limit(50)
-                .all()
-            )
-            if tasks_q:
-                rows = []
-                for task, fm, fl in tasks_q:
-                    rows.append({
-                        "Equipment": fl.name,
-                        "Task Type": task.task_type,
-                        "Description": task.description[:80] if task.description else "",
-                        "Interval": f"{task.interval} {task.interval_unit}",
-                        "Duration (hrs)": task.duration_hours,
-                        "Resource": task.resource_type,
-                        "Online": "✓" if task.is_online else "✗",
-                        "Regulatory": "✓" if task.is_regulatory else "",
-                        "Criticality": fm.criticality,
-                    })
-                st.dataframe(pd.DataFrame(rows), use_container_width=True)
-            else:
-                st.info("No tasks found for this sub-system.")
+                floc_name = floc.name if floc else selected_floc
+                st.subheader(f"Tasks — {floc_name}")
+                st.caption(f"{len(tasks_q)} tasks shown")
+                if tasks_q:
+                    rows = []
+                    for task, fm, fl in tasks_q:
+                        rows.append({
+                            "Equipment": fl.name,
+                            "Task Type": task.task_type,
+                            "Description": task.description[:80] if task.description else "",
+                            "Interval": f"{task.interval} {task.interval_unit}",
+                            "Duration (hrs)": task.duration_hours,
+                            "Resource": task.resource_type,
+                            "Online": "✓" if task.is_online else "✗",
+                            "Regulatory": "✓" if task.is_regulatory else "",
+                            "Criticality": fm.criticality,
+                        })
+                    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+                else:
+                    st.info("No tasks found for this selection.")
 
         # ── Distribution charts ────────────────────────────────────────────────
         st.divider()
