@@ -25,6 +25,24 @@
       "description": "Isolate regulatory/statutory tasks into dedicated plan items",
       "parameter_key": "enabled",
       "parameter_value": "true"
+    },
+    {
+      "rule_type": "task_type_separation",
+      "description": "Separate tasks by type (Inspection, Lubrication, PM, CM) into distinct items",
+      "parameter_key": "enabled",
+      "parameter_value": "false"
+    },
+    {
+      "rule_type": "criticality_isolation",
+      "description": "Isolate high-criticality (A-class) tasks into dedicated plan items",
+      "parameter_key": "enabled",
+      "parameter_value": "false"
+    },
+    {
+      "rule_type": "max_operations",
+      "description": "Split task list items when operation count exceeds cap (0 = disabled)",
+      "parameter_key": "max_ops",
+      "parameter_value": "0"
     }
   ]
 }

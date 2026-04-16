@@ -8,7 +8,11 @@ from db.models import (
     RuleSet, Rule,
 )
 from db.database import get_session
-from engine.rules import build_config, MaxDurationEvaluator, ShutdownSeparationEvaluator, RegulatoryIsolationEvaluator
+from engine.rules import (
+    build_config,
+    MaxDurationEvaluator, ShutdownSeparationEvaluator, RegulatoryIsolationEvaluator,
+    TaskTypeSeparationEvaluator, CriticalityIsolationEvaluator, MaxOperationsEvaluator,
+)
 from config import DEFAULT_PLAN_PREFIX
 
 
@@ -63,6 +67,9 @@ def package(
         max_dur_eval = MaxDurationEvaluator(cfg.max_duration_hours)
         shutdown_eval = ShutdownSeparationEvaluator()
         reg_eval = RegulatoryIsolationEvaluator()
+        task_type_eval = TaskTypeSeparationEvaluator()
+        crit_eval = CriticalityIsolationEvaluator()
+        max_ops_eval = MaxOperationsEvaluator(cfg.max_operations)
 
         # Load all tasks for this dataset
         tasks = session.query(Task).filter(Task.dataset_id == dataset_id).all()
@@ -90,10 +97,11 @@ def package(
 
         all_groups: list[dict] = []  # {tasks, is_regulatory, floc_key, resource_type, interval_key, is_online}
 
-        # ── Step 2 & 3: Group standard tasks by level + online/offline ──────
+        # ── Step 2–7: Group tasks by level, criticality, online/offline,
+        #             resource type, task type, interval, duration, operations ──
         def _group_tasks(task_list, is_regulatory=False):
             groups = []
-            # Group by hierarchy level
+            # Step 2: Group by hierarchy level
             by_floc: dict[str, list] = defaultdict(list)
             for task in task_list:
                 meta = task_meta.get(task.id)
@@ -105,7 +113,7 @@ def package(
                 by_floc[key].append(task)
 
             for floc_key, floc_tasks in by_floc.items():
-                # ── Step 2: Separate online/offline ──────────────────────────
+                # Step 3: Separate online/offline
                 if cfg.shutdown_separation and not is_regulatory:
                     online_offline = shutdown_eval.split(floc_tasks)
                 else:
@@ -114,30 +122,49 @@ def package(
                 for ol_key, ol_tasks in online_offline.items():
                     is_online = (ol_key == "online") or not cfg.shutdown_separation
 
-                    # ── Step 4: Split by resource_type ───────────────────────
-                    by_resource: dict[str, list] = defaultdict(list)
-                    for task in ol_tasks:
-                        by_resource[task.resource_type or "MISC"].append(task)
+                    # Step 3b: Criticality isolation (A-class vs B/C)
+                    if cfg.criticality_isolation and not is_regulatory:
+                        crit_buckets = crit_eval.split(ol_tasks, task_meta)
+                    else:
+                        crit_buckets = {"": ol_tasks}
 
-                    for resource_type, res_tasks in by_resource.items():
-                        # ── Step 5: Split by interval ────────────────────────
-                        by_interval: dict[str, list] = defaultdict(list)
-                        for task in res_tasks:
-                            interval_key = f"{task.interval}-{task.interval_unit}"
-                            by_interval[interval_key].append(task)
+                    for crit_key, crit_tasks in crit_buckets.items():
+                        # Step 4: Split by resource_type
+                        by_resource: dict[str, list] = defaultdict(list)
+                        for task in crit_tasks:
+                            by_resource[task.resource_type or "MISC"].append(task)
 
-                        for interval_key, int_tasks in by_interval.items():
-                            # ── Step 6: Apply max-duration cap ────────────────
-                            buckets = max_dur_eval.split(int_tasks)
-                            for bucket in buckets:
-                                groups.append({
-                                    "tasks": bucket,
-                                    "is_regulatory": is_regulatory,
-                                    "floc_key": floc_key,
-                                    "resource_type": resource_type,
-                                    "interval_key": interval_key,
-                                    "is_online": is_online,
-                                })
+                        for resource_type, res_tasks in by_resource.items():
+                            # Step 4b: Task type separation
+                            if cfg.task_type_separation:
+                                type_buckets = task_type_eval.split(res_tasks)
+                            else:
+                                type_buckets = {"": res_tasks}
+
+                            for task_type_key, typed_tasks in type_buckets.items():
+                                # Step 5: Split by interval
+                                by_interval: dict[str, list] = defaultdict(list)
+                                for task in typed_tasks:
+                                    interval_key = f"{task.interval}-{task.interval_unit}"
+                                    by_interval[interval_key].append(task)
+
+                                for interval_key, int_tasks in by_interval.items():
+                                    # Step 6: Max-duration cap
+                                    dur_buckets = max_dur_eval.split(int_tasks)
+                                    for dur_bucket in dur_buckets:
+                                        # Step 7: Max-operations cap
+                                        op_buckets = max_ops_eval.split(dur_bucket)
+                                        for bucket in op_buckets:
+                                            groups.append({
+                                                "tasks": bucket,
+                                                "is_regulatory": is_regulatory,
+                                                "floc_key": floc_key,
+                                                "resource_type": resource_type,
+                                                "interval_key": interval_key,
+                                                "is_online": is_online,
+                                                "criticality_key": crit_key,
+                                                "task_type_key": task_type_key,
+                                            })
             return groups
 
         all_groups.extend(_group_tasks(std_tasks, is_regulatory=False))
@@ -185,7 +212,15 @@ def package(
                 freq = int(interval_parts[0]) if interval_parts[0].isdigit() else 1
                 freq_unit = interval_parts[1] if len(interval_parts) > 1 else "months"
 
-                suffix = "REG" if group["is_regulatory"] else ("ONLINE" if group["is_online"] else "SHUTDOWN")
+                suffix_parts = []
+                if group["is_regulatory"]:
+                    suffix_parts.append("REG")
+                elif group.get("criticality_key") == "critical":
+                    suffix_parts.append("CRIT")
+                suffix_parts.append("ONLINE" if group["is_online"] else "SHUTDOWN")
+                if group.get("task_type_key"):
+                    suffix_parts.append(group["task_type_key"][:8])
+                suffix = "-".join(suffix_parts)
                 item_desc = f"{floc_name} | {resource_type} | {group['interval_key']} | {suffix}"
 
                 item_id = str(uuid.uuid4())

@@ -42,6 +42,29 @@ RULE_TYPE_META = {
         "param_label": "Enabled",
         "param_type": "bool",
     },
+    "task_type_separation": {
+        "label": "Task Type Separation",
+        "icon": "🔧",
+        "desc": "Separate tasks by type (Inspection, Lubrication, PM, CM) into distinct items",
+        "param_label": "Enabled",
+        "param_type": "bool",
+    },
+    "criticality_isolation": {
+        "label": "Criticality Isolation",
+        "icon": "🔴",
+        "desc": "Isolate high-criticality (A-class) tasks into dedicated plan items",
+        "param_label": "Enabled",
+        "param_type": "bool",
+    },
+    "max_operations": {
+        "label": "Max Operations per Item",
+        "icon": "🔢",
+        "desc": "Split task list items when operation count exceeds cap (0 = disabled)",
+        "param_label": "Max Operations (0 = off)",
+        "param_type": "int",
+        "param_min": 0,
+        "param_max": 100,
+    },
 }
 
 
@@ -195,6 +218,13 @@ def render():
                         cfg.shutdown_separation = new_val.lower() in ("true", "1", "yes")
                     elif rt == "regulatory_isolation":
                         cfg.regulatory_isolation = new_val.lower() in ("true", "1", "yes")
+                    elif rt == "task_type_separation":
+                        cfg.task_type_separation = new_val.lower() in ("true", "1", "yes")
+                    elif rt == "criticality_isolation":
+                        cfg.criticality_isolation = new_val.lower() in ("true", "1", "yes")
+                    elif rt == "max_operations":
+                        try: cfg.max_operations = int(new_val)
+                        except ValueError: pass
 
                 with st.spinner("Running dry-run…"):
                     try:

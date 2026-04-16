@@ -1,5 +1,6 @@
 """Rule evaluator classes — one per rule_type."""
-from dataclasses import dataclass, field
+from collections import defaultdict
+from dataclasses import dataclass
 from typing import Any
 
 
@@ -9,6 +10,9 @@ class RuleConfig:
     max_duration_hours: float = 8.0
     shutdown_separation: bool = True
     regulatory_isolation: bool = True
+    task_type_separation: bool = False
+    criticality_isolation: bool = False
+    max_operations: int = 0  # 0 = disabled
 
 
 def build_config(rules: list) -> RuleConfig:
@@ -31,6 +35,15 @@ def build_config(rules: list) -> RuleConfig:
             cfg.shutdown_separation = val.strip().lower() in ("true", "1", "yes")
         elif rt == "regulatory_isolation":
             cfg.regulatory_isolation = val.strip().lower() in ("true", "1", "yes")
+        elif rt == "task_type_separation":
+            cfg.task_type_separation = val.strip().lower() in ("true", "1", "yes")
+        elif rt == "criticality_isolation":
+            cfg.criticality_isolation = val.strip().lower() in ("true", "1", "yes")
+        elif rt == "max_operations":
+            try:
+                cfg.max_operations = int(val)
+            except (ValueError, TypeError):
+                pass
     return cfg
 
 
@@ -98,3 +111,48 @@ class RegulatoryIsolationEvaluator:
         if standard:
             result["standard"] = standard
         return result
+
+
+class TaskTypeSeparationEvaluator:
+    """Groups tasks by task_type (Inspection, Lubrication, PM, CM, etc.)."""
+
+    def split(self, tasks: list) -> dict[str, list]:
+        by_type: dict[str, list] = defaultdict(list)
+        for t in tasks:
+            key = (t.task_type or "GENERAL").strip().upper()
+            by_type[key].append(t)
+        return dict(by_type)
+
+
+class CriticalityIsolationEvaluator:
+    """Isolates high-criticality (A-class) tasks into a separate bucket."""
+
+    HIGH = {"A", "HIGH", "CRITICAL", "1", "H"}
+
+    def split(self, tasks: list, task_meta: dict) -> dict[str, list]:
+        critical, standard = [], []
+        for t in tasks:
+            fm = task_meta.get(t.id, {}).get("fm")
+            crit = (fm.criticality or "").strip().upper() if fm else ""
+            if crit in self.HIGH:
+                critical.append(t)
+            else:
+                standard.append(t)
+        result = {}
+        if critical:
+            result["critical"] = critical
+        if standard:
+            result["standard"] = standard
+        return result
+
+
+class MaxOperationsEvaluator:
+    """Splits a list of tasks into buckets where each bucket ≤ max_ops."""
+
+    def __init__(self, max_ops: int):
+        self.max_ops = max_ops
+
+    def split(self, tasks: list) -> list[list]:
+        if self.max_ops <= 0:
+            return [tasks]
+        return [tasks[i:i + self.max_ops] for i in range(0, len(tasks), self.max_ops)]
