@@ -32,11 +32,12 @@ st.markdown("""
 st.title(f"{APP_ICON} {APP_TITLE}")
 st.caption("Automated FMECA → SAP PM packaging | Rules engine + human-in-the-loop")
 
-tab1, tab2, tab3, tab4 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "1 · Ingest & Preview",
     "2 · Rule Editor",
     "3 · Review & Refine",
     "4 · Export",
+    "📖 Demo Guide",
 ])
 
 with tab1:
@@ -54,3 +55,7 @@ with tab3:
 with tab4:
     from ui.page_export import render as render_export
     render_export()
+
+with tab5:
+    with open("docs/DEMO_GUIDE.md", "r") as f:
+        st.markdown(f.read())
