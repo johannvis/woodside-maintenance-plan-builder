@@ -108,12 +108,25 @@ def render():
                         .all()
                     )
                     for system in systems:
+                        subsystems = (
+                            session.query(FunctionalLocation)
+                            .filter(FunctionalLocation.parent_id == system.id)
+                            .all()
+                        )
+                        task_count_sys = (
+                            session.query(Task)
+                            .join(FailureMode)
+                            .join(FunctionalLocation)
+                            .filter(FunctionalLocation.parent_id == system.id)
+                            .count()
+                        )
                         with st.expander(f"⚙️ {system.name}"):
-                            subsystems = (
-                                session.query(FunctionalLocation)
-                                .filter(FunctionalLocation.parent_id == system.id)
-                                .all()
-                            )
+                            if st.button(
+                                f"📋 View all {task_count_sys} tasks",
+                                key=f"sys_{system.id}",
+                                use_container_width=True,
+                            ):
+                                st.session_state["selected_floc_id"] = system.id
                             for sub in subsystems:
                                 task_count_sub = (
                                     session.query(Task)
