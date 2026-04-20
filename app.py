@@ -32,12 +32,13 @@ st.markdown("""
 st.title(f"{APP_ICON} {APP_TITLE}")
 st.caption("Automated FMECA → SAP PM packaging | Rules engine + human-in-the-loop")
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "1 · Ingest & Preview",
     "2 · Rule Editor",
     "3 · Review & Refine",
     "4 · Export",
     "📖 Demo Guide",
+    "⚙️ Algorithm",
 ])
 
 with tab1:
@@ -58,4 +59,8 @@ with tab4:
 
 with tab5:
     with open("docs/DEMO_GUIDE.md", "r") as f:
+        st.markdown(f.read())
+
+with tab6:
+    with open("docs/ALGORITHM.md", "r") as f:
         st.markdown(f.read())
