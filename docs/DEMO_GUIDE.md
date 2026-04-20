@@ -1,8 +1,7 @@
 # Maintenance Plan Builder — Demo Guide
 
 **Audience:** Parth, Jason, Emma
-**Duration:** ~15 minutes
-**URL:** http://localhost:8501 (after installation)
+**Duration:** ~20 minutes
 
 ---
 
@@ -16,14 +15,14 @@ Open with this framing:
 
 ## Step 1 — Ingest & Preview (3 minutes)
 
-1. Open the app at http://localhost:8501
-2. You'll land on **Tab 1: Ingest & Preview**
-3. Click **"Load LNG Train Sample"**
-4. Point out the five stats chips that appear:
+1. Open the app and land on **Tab 1: Ingest & Preview**
+2. Click **"Load LNG Train Sample"**
+3. Point out the five stats chips that appear:
    - **1,000 tasks** | **125 FLOCs** | **14 Asset Classes** | **10 Systems** | **1 Train**
-5. Expand the asset tree:
-   `🏭 LNG1 → ⚙️ Feed Gas Compression → 📦 Feed Gas Compressor A`
-6. Click on a sub-system — a table of tasks appears on the right
+4. Expand the asset tree:
+   `🏭 LNG1 → ⚙️ Feed Gas Compression`
+5. Click the **"View all N tasks"** roll-up button at the system level — this shows all tasks across every piece of equipment in that system in one hit
+6. Drill down to a leaf node e.g. `📦 Feed Gas Compressor A` and click it — the task table updates on the right
 7. Scroll down to show the three distribution charts (task type, resource type, criticality)
 
 **Key message:**
@@ -31,17 +30,20 @@ Open with this framing:
 
 ---
 
-## Step 2 — Rule Editor (3 minutes)
+## Step 2 — Rule Editor (4 minutes)
 
 1. Click **Tab 2: Rule Editor**
-2. Walk through the four rule cards:
+2. Walk through the seven rule cards:
 
    | Rule | What it means |
    |------|--------------|
-   | **Primary Grouping** | Which level of the asset hierarchy to group tasks by (Train → System → Sub-system → Equipment). Default: Sub-system (level 3). |
-   | **Max Duration Cap** | Split a task list if total duration exceeds this many hours. Default: 8 hrs. |
-   | **Shutdown Separation** | Keep online tasks and shutdown tasks in separate plan items. |
-   | **Regulatory Isolation** | Give statutory/regulatory tasks their own dedicated plan items. |
+   | 🌲 **Primary Grouping** | Which level of the asset hierarchy to group tasks by (Train → System → Sub-system → Equipment). Default: Sub-system (level 3). |
+   | ⏱️ **Max Duration Cap** | Split a task list if total duration exceeds this many hours. Default: 8 hrs. |
+   | 🔒 **Shutdown Separation** | Keep online tasks and shutdown tasks in separate plan items. |
+   | 📋 **Regulatory Isolation** | Give statutory/regulatory tasks their own dedicated plan items. |
+   | 🔧 **Task Type Separation** | Separate tasks by type (Inspection, Lubrication, PM, CM) into distinct items. |
+   | 🔴 **Criticality Isolation** | Isolate A-class/HIGH criticality tasks into their own dedicated items. |
+   | 🔢 **Max Operations per Item** | Cap the number of operations per task list and split if exceeded (0 = disabled). |
 
 3. **Live demo:** Change "Max Hours per Item" from **8 → 4**, click **"Refresh Estimate"**
    - Item count roughly doubles — more splits required to stay under cap
@@ -53,12 +55,15 @@ Open with this framing:
 
 ---
 
-## Step 3 — Review & Refine (5 minutes)
+## Step 3 — Review & Refine (7 minutes)
 
 1. Click **Tab 3: Review & Refine**
 2. Click **"▶ Generate Plans"** (takes 2–3 seconds)
 3. Point out the summary bar:
    - **270 plans** | **856 items** | **856 task lists** | **1,000 operations**
+
+### Plan View (default)
+
 4. Expand a plan in the tree on the left, e.g.:
    `📋 PM-LNG-Feed Gas Compressor A-PG-MECH-001`
 5. Click on an item (green = online, yellow = shutdown, red = regulatory)
@@ -67,11 +72,27 @@ Open with this framing:
    - **Duration bar** — visual indicator vs the 8-hour cap
    - **Operations list** — the individual maintenance tasks packaged into this item
    - **FMECA Traceability table** — links each operation back to its original failure mode and criticality
-
 7. **Human-in-the-loop demo:** Use the "Move Operation to Another Item" dropdown to move one operation to a different item, then click **Move**. The duration bar updates.
 
+### Equipment View
+
+8. Switch the **View Mode** toggle to **Equipment View**
+9. Click any FLOC in the hierarchy — the panel shows all operations assigned to that asset across all plans, regardless of which plan they landed in
+10. This is useful for verifying that a piece of equipment's full maintenance load looks sensible
+
+### Packaging Trace
+
+11. Switch to **Packaging Trace**
+12. This is a flat, filterable table that maps every one of the 1,000 FMECA tasks to its assigned plan and item
+13. Filter by plan name or FLOC to audit specific decisions
+
+### AI Insights
+
+14. Click **"✨ Generate AI Insights"**
+15. Claude Haiku analyses the packaging output and surfaces benchmark observations — e.g. items running close to the duration cap, regulatory task concentration, items with unusually high operation counts
+
 **Key message:**
-*"The algorithm does 90% of the work in seconds. The planner reviews the output and makes targeted adjustments — rather than building every plan from scratch."*
+*"The algorithm does 90% of the work in seconds. The planner has three lenses — Plan View for structured review, Equipment View for asset-centric checks, and Packaging Trace for full auditability."*
 
 ---
 
@@ -93,6 +114,13 @@ Open with this framing:
 
 ---
 
+## Bonus — Algorithm Explainer (optional, 2 minutes)
+
+1. Click **Tab 6: ⚙️ Algorithm**
+2. Walk through the 9-step packaging logic — useful if the audience wants to understand what's happening under the hood or discuss customisation
+
+---
+
 ## Closing (1 minute)
 
 > "What you've just seen took about 10 seconds to run. The manual equivalent in Crystallize takes a team of contractors several weeks. The rules are configurable, the output is SAP-ready, and every decision is traceable back to the FMECA. This same pattern could be extended to any asset class — LNG, pipelines, utilities — just by loading a different FMECA and adjusting the rules."
@@ -105,6 +133,7 @@ Open with this framing:
 | What about edge cases the rules don't cover? | The review step (Tab 3) is specifically for that — planners can move individual operations between items. |
 | How would we deploy this? | Docker container on EC2, same pattern as the MainStream demo. Or Streamlit Community Cloud for quick sharing. |
 | Can we add more rules? | Yes — each rule type is an isolated class in `engine/rules.py`. Adding a new rule = adding one class. |
+| What's the AI Insights feature doing? | Claude Haiku is called via the Anthropic API against the packaging output. It's a lightweight analytical layer — not making packaging decisions, just surfacing patterns for the planner. |
 
 ---
 
