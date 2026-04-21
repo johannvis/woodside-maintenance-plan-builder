@@ -101,17 +101,18 @@ def _render_plan_view(session, packaging_session_id: str, plans: list):
     col_tree, col_detail = st.columns([2, 3])
 
     with col_tree:
-        st.subheader("Plan Tree")
-        for plan in plans:
-            with st.expander(f"📋 {plan.name}", expanded=False):
-                for item in plan.items:
-                    item_label = (
-                        f"{'🔴' if item.is_regulatory else ('🟡' if not item.is_online else '🟢')} "
-                        f"{item.description[:50] if item.description else item.id[:8]} "
-                        f"({item.total_duration_hours:.1f}h)"
-                    )
-                    if st.button(item_label, key=f"item_{item.id}"):
-                        st.session_state["selected_item_id"] = item.id
+        st.markdown("**Plan Tree**")
+        with st.container(height=700, border=True):
+            for plan in plans:
+                with st.expander(f"📋 {plan.name}", expanded=False):
+                    for item in plan.items:
+                        item_label = (
+                            f"{'🔴' if item.is_regulatory else ('🟡' if not item.is_online else '🟢')} "
+                            f"{item.description[:50] if item.description else item.id[:8]} "
+                            f"({item.total_duration_hours:.1f}h)"
+                        )
+                        if st.button(item_label, key=f"item_{item.id}"):
+                            st.session_state["selected_item_id"] = item.id
 
     with col_detail:
         selected_item_id = st.session_state.get("selected_item_id")
@@ -125,78 +126,79 @@ def _render_plan_view(session, packaging_session_id: str, plans: list):
             return
 
         item = detail["item"]
-        st.subheader(f"Item Detail: {item.description[:60] if item.description else ''}")
+        with st.container(height=700, border=True):
+            st.subheader(f"Item Detail: {item.description[:60] if item.description else ''}")
 
-        badges = []
-        if item.is_regulatory:
-            badges.append("🔴 Regulatory")
-        if not item.is_online:
-            badges.append("🔒 Shutdown")
-        badges.append(f"⏱️ {item.frequency} {item.frequency_unit}")
-        badges.append(f"⏳ {item.total_duration_hours:.1f}h total")
-        st.markdown("  ".join(badges))
+            badges = []
+            if item.is_regulatory:
+                badges.append("🔴 Regulatory")
+            if not item.is_online:
+                badges.append("🔒 Shutdown")
+            badges.append(f"⏱️ {item.frequency} {item.frequency_unit}")
+            badges.append(f"⏳ {item.total_duration_hours:.1f}h total")
+            st.markdown("  ".join(badges))
 
-        max_dur = st.session_state.get("max_duration_display", 8.0)
-        pct = min(item.total_duration_hours / max_dur, 1.0) * 100
-        bar_color = "#e74c3c" if pct >= 100 else "#f39c12" if pct >= 75 else "#2ecc71"
-        st.markdown(
-            f"""<div style="background:#eee;border-radius:4px;height:16px;">
-            <div style="background:{bar_color};width:{pct:.0f}%;height:16px;border-radius:4px;"></div>
-            </div><small>{item.total_duration_hours:.1f}h / {max_dur}h cap</small>""",
-            unsafe_allow_html=True,
-        )
-
-        st.divider()
-        st.markdown("**Operations**")
-        if detail["ops"]:
-            st.dataframe(pd.DataFrame(detail["ops"]), use_container_width=True, hide_index=True)
-        else:
-            st.info("No operations.")
-
-        if detail["ops"]:
-            st.markdown("**Move Operation to Another Item**")
-            all_items = (
-                session.query(MaintenancePlanItem)
-                .filter(MaintenancePlanItem.session_id == packaging_session_id)
-                .order_by(MaintenancePlanItem.description)
-                .all()
+            max_dur = st.session_state.get("max_duration_display", 8.0)
+            pct = min(item.total_duration_hours / max_dur, 1.0) * 100
+            bar_color = "#e74c3c" if pct >= 100 else "#f39c12" if pct >= 75 else "#2ecc71"
+            st.markdown(
+                f"""<div style="background:#eee;border-radius:4px;height:16px;">
+                <div style="background:{bar_color};width:{pct:.0f}%;height:16px;border-radius:4px;"></div>
+                </div><small>{item.total_duration_hours:.1f}h / {max_dur}h cap</small>""",
+                unsafe_allow_html=True,
             )
-            op_labels = [r["Op#"] + " — " + r["Description"][:40] for r in detail["ops"]]
-            tl = detail["tl"]
-            ops_for_move = tl.operations if tl else []
 
-            move_op_label = st.selectbox("Select operation to move", op_labels, key="move_op_sel")
-            target_items = [i for i in all_items if i.id != selected_item_id]
-            target_labels = [
-                f"{i.description[:50] if i.description else i.id[:8]}" for i in target_items
-            ]
-            if target_labels:
-                move_target_label = st.selectbox("Move to item", target_labels, key="move_target_sel")
-                if st.button("Move", key="move_op_btn"):
-                    op_idx = op_labels.index(move_op_label)
-                    target_idx = target_labels.index(move_target_label)
-                    op_to_move = ops_for_move[op_idx]
-                    target_item = target_items[target_idx]
-                    target_tl = target_item.task_list
-                    if target_tl:
-                        op_to_move.task_list_id = target_tl.id
-                        item.total_duration_hours -= op_to_move.duration_hours or 0
-                        target_item.total_duration_hours += op_to_move.duration_hours or 0
-                        session.commit()
-                        st.session_state["selected_item_id"] = selected_item_id
-                        st.success("Operation moved.")
-                        st.rerun()
+            st.divider()
+            st.markdown("**Operations**")
+            if detail["ops"]:
+                st.dataframe(pd.DataFrame(detail["ops"]), use_container_width=True, hide_index=True)
+            else:
+                st.info("No operations.")
 
-        st.divider()
-        st.markdown("**FMECA Traceability**")
-        if detail["trace"]:
-            st.dataframe(
-                pd.DataFrame(detail["trace"]),
-                use_container_width=True,
-                hide_index=True,
-            )
-        else:
-            st.info("No traceability data.")
+            if detail["ops"]:
+                st.markdown("**Move Operation to Another Item**")
+                all_items = (
+                    session.query(MaintenancePlanItem)
+                    .filter(MaintenancePlanItem.session_id == packaging_session_id)
+                    .order_by(MaintenancePlanItem.description)
+                    .all()
+                )
+                op_labels = [r["Op#"] + " — " + r["Description"][:40] for r in detail["ops"]]
+                tl = detail["tl"]
+                ops_for_move = tl.operations if tl else []
+
+                move_op_label = st.selectbox("Select operation to move", op_labels, key="move_op_sel")
+                target_items = [i for i in all_items if i.id != selected_item_id]
+                target_labels = [
+                    f"{i.description[:50] if i.description else i.id[:8]}" for i in target_items
+                ]
+                if target_labels:
+                    move_target_label = st.selectbox("Move to item", target_labels, key="move_target_sel")
+                    if st.button("Move", key="move_op_btn"):
+                        op_idx = op_labels.index(move_op_label)
+                        target_idx = target_labels.index(move_target_label)
+                        op_to_move = ops_for_move[op_idx]
+                        target_item = target_items[target_idx]
+                        target_tl = target_item.task_list
+                        if target_tl:
+                            op_to_move.task_list_id = target_tl.id
+                            item.total_duration_hours -= op_to_move.duration_hours or 0
+                            target_item.total_duration_hours += op_to_move.duration_hours or 0
+                            session.commit()
+                            st.session_state["selected_item_id"] = selected_item_id
+                            st.success("Operation moved.")
+                            st.rerun()
+
+            st.divider()
+            st.markdown("**FMECA Traceability**")
+            if detail["trace"]:
+                st.dataframe(
+                    pd.DataFrame(detail["trace"]),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+            else:
+                st.info("No traceability data.")
 
 
 def _render_equipment_view(session, packaging_session_id: str, dataset_id: str):
