@@ -99,48 +99,49 @@ def render():
         col_tree, col_tasks = st.columns([1, 2])
 
         with col_tree:
-            st.subheader("Asset Hierarchy")
-            for train in trains:
-                with st.expander(f"🏭 {train.name}", expanded=len(trains) == 1):
-                    systems = (
-                        session.query(FunctionalLocation)
-                        .filter(FunctionalLocation.parent_id == train.id)
-                        .all()
-                    )
-                    for system in systems:
-                        subsystems = (
+            st.markdown("**Asset Hierarchy**")
+            with st.container(height=560, border=True):
+                for train in trains:
+                    with st.expander(f"🏭 {train.name}", expanded=len(trains) == 1):
+                        systems = (
                             session.query(FunctionalLocation)
-                            .filter(FunctionalLocation.parent_id == system.id)
+                            .filter(FunctionalLocation.parent_id == train.id)
                             .all()
                         )
-                        task_count_sys = (
-                            session.query(Task)
-                            .join(FailureMode)
-                            .join(FunctionalLocation)
-                            .filter(FunctionalLocation.parent_id == system.id)
-                            .count()
-                        )
-                        with st.expander(f"⚙️ {system.name}"):
-                            if st.button(
-                                f"📋 View all {task_count_sys} tasks",
-                                key=f"sys_{system.id}",
-                                use_container_width=True,
-                            ):
-                                st.session_state["selected_floc_id"] = system.id
-                            for sub in subsystems:
-                                task_count_sub = (
-                                    session.query(Task)
-                                    .join(FailureMode)
-                                    .join(FunctionalLocation)
-                                    .filter(
-                                        (FunctionalLocation.id == sub.id) |
-                                        (FunctionalLocation.parent_id == sub.id)
+                        for system in systems:
+                            subsystems = (
+                                session.query(FunctionalLocation)
+                                .filter(FunctionalLocation.parent_id == system.id)
+                                .all()
+                            )
+                            task_count_sys = (
+                                session.query(Task)
+                                .join(FailureMode)
+                                .join(FunctionalLocation)
+                                .filter(FunctionalLocation.parent_id == system.id)
+                                .count()
+                            )
+                            with st.expander(f"⚙️ {system.name}"):
+                                if st.button(
+                                    f"📋 View all {task_count_sys} tasks",
+                                    key=f"sys_{system.id}",
+                                    use_container_width=True,
+                                ):
+                                    st.session_state["selected_floc_id"] = system.id
+                                for sub in subsystems:
+                                    task_count_sub = (
+                                        session.query(Task)
+                                        .join(FailureMode)
+                                        .join(FunctionalLocation)
+                                        .filter(
+                                            (FunctionalLocation.id == sub.id) |
+                                            (FunctionalLocation.parent_id == sub.id)
+                                        )
+                                        .count()
                                     )
-                                    .count()
-                                )
-                                btn_label = f"📦 {sub.name} ({task_count_sub})"
-                                if st.button(btn_label, key=f"floc_{sub.id}", use_container_width=True):
-                                    st.session_state["selected_floc_id"] = sub.id
+                                    btn_label = f"📦 {sub.name} ({task_count_sub})"
+                                    if st.button(btn_label, key=f"floc_{sub.id}", use_container_width=True):
+                                        st.session_state["selected_floc_id"] = sub.id
 
         with col_tasks:
             selected_floc = st.session_state.get("selected_floc_id")
@@ -160,25 +161,26 @@ def render():
                     .all()
                 )
                 floc_name = floc.name if floc else selected_floc
-                st.subheader(f"Tasks — {floc_name}")
-                st.caption(f"{len(tasks_q)} tasks shown")
-                if tasks_q:
-                    rows = []
-                    for task, fm, fl in tasks_q:
-                        rows.append({
-                            "Equipment": fl.name,
-                            "Task Type": task.task_type,
-                            "Description": task.description[:80] if task.description else "",
-                            "Interval": f"{task.interval} {task.interval_unit}",
-                            "Duration (hrs)": task.duration_hours,
-                            "Resource": task.resource_type,
-                            "Online": "✓" if task.is_online else "✗",
-                            "Regulatory": "✓" if task.is_regulatory else "",
-                            "Criticality": fm.criticality,
-                        })
-                    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-                else:
-                    st.info("No tasks found for this selection.")
+                st.markdown(f"**Tasks — {floc_name}**")
+                with st.container(height=560, border=True):
+                    st.caption(f"{len(tasks_q)} tasks shown")
+                    if tasks_q:
+                        rows = []
+                        for task, fm, fl in tasks_q:
+                            rows.append({
+                                "Equipment": fl.name,
+                                "Task Type": task.task_type,
+                                "Description": task.description[:80] if task.description else "",
+                                "Interval": f"{task.interval} {task.interval_unit}",
+                                "Duration (hrs)": task.duration_hours,
+                                "Resource": task.resource_type,
+                                "Online": "✓" if task.is_online else "✗",
+                                "Regulatory": "✓" if task.is_regulatory else "",
+                                "Criticality": fm.criticality,
+                            })
+                        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True, height=500)
+                    else:
+                        st.info("No tasks found for this selection.")
 
         # ── Distribution charts ────────────────────────────────────────────────
         st.divider()
