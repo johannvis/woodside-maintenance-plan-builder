@@ -212,27 +212,32 @@ def _render_equipment_view(session, packaging_session_id: str, dataset_id: str):
         return
 
     level_icons = {1: "🏭", 2: "⚙️", 3: "📦", 4: "🔩"}
-    floc_labels = []
-    floc_ids = []
-    for f in all_flocs:
-        indent = "\u00a0\u00a0\u00a0\u00a0" * (f.level - 1)
-        icon = level_icons.get(f.level, "▪️")
-        floc_labels.append(f"{indent}{icon} {f.name}")
-        floc_ids.append(f.id)
+
+    # Initialise selection
+    if "equip_floc_sel" not in st.session_state:
+        st.session_state["equip_floc_sel"] = all_flocs[0].id
 
     col_left, col_right = st.columns([1, 3])
 
+    # ── Left panel: independently scrollable asset tree ───────────────────────
     with col_left:
-        st.subheader("Asset Hierarchy")
-        selected_idx = st.selectbox(
-            "Select equipment level",
-            range(len(floc_labels)),
-            format_func=lambda i: floc_labels[i],
-            key="equip_floc_sel",
-        )
+        st.markdown("**Asset Hierarchy**")
+        with st.container(height=560, border=True):
+            for f in all_flocs:
+                indent = "\u00a0" * ((f.level - 1) * 4)
+                icon = level_icons.get(f.level, "▪️")
+                is_selected = st.session_state["equip_floc_sel"] == f.id
+                marker = "▶ " if is_selected else ""
+                label = f"{indent}{marker}{icon} {f.name}"
+                if st.button(label, key=f"floc_btn_{f.id}",
+                             use_container_width=True,
+                             help=f"Level {f.level}"):
+                    st.session_state["equip_floc_sel"] = f.id
+                    st.rerun()
 
-    selected_floc_id = floc_ids[selected_idx]
-    selected_floc = all_flocs[selected_idx]
+    # ── Resolve selected FLOC ─────────────────────────────────────────────────
+    selected_floc_id = st.session_state["equip_floc_sel"]
+    selected_floc = next((f for f in all_flocs if f.id == selected_floc_id), all_flocs[0])
     desc_ids = _get_floc_descendants(all_flocs, selected_floc_id)
 
     ops = (
@@ -253,25 +258,27 @@ def _render_equipment_view(session, packaging_session_id: str, dataset_id: str):
         plan = item.plan if item else None
         rows.append({
             "Equipment": floc.name if floc else "",
-            "Op#": f"{op.operation_no:03d}",
-            "Task": op.description[:70] if op.description else "",
-            "Resource": op.resource_type or "",
-            "Duration (h)": op.duration_hours or 0,
+            "Task Type": src.task_type if src else "",
+            "Description": op.description[:70] if op.description else "",
             "Interval": f"{src.interval} {src.interval_unit}" if src else "",
+            "Duration (h)": op.duration_hours or 0,
+            "Resource": op.resource_type or "",
             "Online": "✓" if (src and src.is_online) else "🔒",
-            "Reg": "✓" if (src and src.is_regulatory) else "",
-            "Plan": plan.name if plan else "",
-            "Item": item.description[:55] if item and item.description else "",
+            "Regulatory": "✓" if (src and src.is_regulatory) else "",
+            "Criticality": fm.criticality if fm else "",
         })
 
+    # ── Right panel: independently scrollable task table ──────────────────────
     with col_right:
-        st.subheader(f"Operations under: {selected_floc.name}")
-        st.caption(f"{len(rows)} operation{'s' if len(rows) != 1 else ''} · level {selected_floc.level}")
-        if rows:
-            df = pd.DataFrame(rows)
-            st.dataframe(df, use_container_width=True, hide_index=True, height=480)
-        else:
-            st.info("No operations assigned to this equipment in the current packaging run.")
+        st.markdown(f"**Tasks — {selected_floc.name}**")
+        with st.container(height=560, border=True):
+            st.caption(f"{len(rows)} task{'s' if len(rows) != 1 else ''} shown")
+            if rows:
+                df = pd.DataFrame(rows)
+                st.dataframe(df, use_container_width=True, hide_index=True,
+                             height=500)
+            else:
+                st.info("No operations assigned to this equipment in the current packaging run.")
 
 
 def _render_packaging_trace(session, packaging_session_id: str):
