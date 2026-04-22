@@ -9,6 +9,7 @@ from db.database import get_session
 from db.models import (
     MaintenancePlan, MaintenancePlanItem, TaskList, Operation,
     Task, FailureMode, FunctionalLocation,
+    AgentDecision, JudgeDecision, AgentProfile,
 )
 from engine.packager import package
 
@@ -97,8 +98,109 @@ def _build_trace_df(session, packaging_session_id: str) -> pd.DataFrame:
 
 # ── View renderers ────────────────────────────────────────────────────────────
 
+def _get_ai_reviewed_items(session, packaging_session_id: str) -> set:
+    """Return set of item IDs that have a JudgeDecision or AgentDecision in this session."""
+    jd_ids = {
+        row.maintenance_plan_item_id
+        for row in session.query(JudgeDecision.maintenance_plan_item_id)
+        .filter(JudgeDecision.session_id == packaging_session_id)
+        .all()
+    }
+    ad_ids = {
+        row.maintenance_plan_item_id
+        for row in session.query(AgentDecision.maintenance_plan_item_id)
+        .filter(AgentDecision.session_id == packaging_session_id)
+        .all()
+    }
+    return jd_ids | ad_ids
+
+
+def _get_agent_review_detail(session, item_id: str, packaging_session_id: str) -> dict | None:
+    """Return agent decisions and judge decision for an item."""
+    decisions = (
+        session.query(AgentDecision)
+        .filter(
+            AgentDecision.maintenance_plan_item_id == item_id,
+            AgentDecision.session_id == packaging_session_id,
+        )
+        .all()
+    )
+    if not decisions:
+        return None
+
+    judge = (
+        session.query(JudgeDecision)
+        .filter(
+            JudgeDecision.maintenance_plan_item_id == item_id,
+            JudgeDecision.session_id == packaging_session_id,
+        )
+        .first()
+    )
+
+    return {"decisions": decisions, "judge": judge}
+
+
+def _render_agent_review_section(agent_data: dict) -> None:
+    """Render expandable agent review section in item detail panel."""
+    decisions = agent_data["decisions"]
+    judge = agent_data["judge"]
+
+    ROLE_ICONS = {"safety": "🔒", "cost": "💰", "efficiency": "⚡", "integrity": "🔩"}
+    ACTION_COLOURS = {"keep": "#2ecc71", "split": "#e74c3c", "merge": "#3498db", "reclassify": "#f39c12"}
+
+    with st.expander("🤖 Agent Review", expanded=True):
+        for d in decisions:
+            role = d.agent_profile.role if d.agent_profile else "unknown"
+            icon = ROLE_ICONS.get(role, "🔬")
+            score = d.score or 0
+            pct = min(score / 10 * 100, 100)
+            bar_colour = "#2ecc71" if score >= 7 else "#f39c12" if score >= 4 else "#e74c3c"
+            action_colour = ACTION_COLOURS.get(d.recommended_action, "#888")
+
+            st.markdown(
+                f"""<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+  <span style="width:90px;font-size:0.8rem;font-weight:600;">{icon} {role.capitalize()}</span>
+  <span style="font-size:1rem;font-weight:700;">{score:.1f}</span>
+  <div style="flex:1;background:#eee;border-radius:4px;height:10px;">
+    <div style="background:{bar_colour};width:{pct:.0f}%;height:10px;border-radius:4px;"></div>
+  </div>
+  <span style="font-size:0.75rem;font-weight:600;color:{action_colour};width:80px;">{d.recommended_action.upper()}</span>
+  <span style="font-size:0.75rem;color:#888;">{d.confidence}</span>
+</div>""",
+                unsafe_allow_html=True,
+            )
+            if d.rationale:
+                st.caption(d.rationale[:200])
+
+        if judge:
+            st.divider()
+            action_colour = ACTION_COLOURS.get(judge.final_action, "#888")
+            winning = ""
+            if judge.winning_agent:
+                winning = f" — driven by **{judge.winning_agent.role}**"
+            st.markdown(
+                f"⚖️ **Judge Decision:** "
+                f"<span style='color:{action_colour};font-weight:700;'>{judge.final_action.upper()}</span>"
+                f"{winning}",
+                unsafe_allow_html=True,
+            )
+            if judge.judge_rationale:
+                st.caption(judge.judge_rationale)
+        else:
+            st.divider()
+            # Find consensus action
+            actions = [d.recommended_action for d in decisions]
+            if actions:
+                from collections import Counter
+                top = Counter(actions).most_common(1)[0][0]
+                st.markdown(f"🤝 **Consensus:** {top.upper()} (no judge required)")
+
+
 def _render_plan_view(session, packaging_session_id: str, plans: list):
     col_tree, col_detail = st.columns([2, 3])
+
+    # Load AI-reviewed item IDs once
+    ai_reviewed = _get_ai_reviewed_items(session, packaging_session_id)
 
     with col_tree:
         st.markdown("**Plan Tree**")
@@ -106,10 +208,11 @@ def _render_plan_view(session, packaging_session_id: str, plans: list):
             for plan in plans:
                 with st.expander(f"📋 {plan.name}", expanded=False):
                     for item in plan.items:
+                        ai_badge = " 🤖" if item.id in ai_reviewed else ""
                         item_label = (
                             f"{'🔴' if item.is_regulatory else ('🟡' if not item.is_online else '🟢')} "
                             f"{item.description[:50] if item.description else item.id[:8]} "
-                            f"({item.total_duration_hours:.1f}h)"
+                            f"({item.total_duration_hours:.1f}h){ai_badge}"
                         )
                         if st.button(item_label, key=f"item_{item.id}"):
                             st.session_state["selected_item_id"] = item.id
@@ -199,6 +302,13 @@ def _render_plan_view(session, packaging_session_id: str, plans: list):
                 )
             else:
                 st.info("No traceability data.")
+
+            # Agent Review section (only if AI review has been run)
+            if selected_item_id in ai_reviewed:
+                st.divider()
+                agent_data = _get_agent_review_detail(session, selected_item_id, packaging_session_id)
+                if agent_data:
+                    _render_agent_review_section(agent_data)
 
 
 def _render_equipment_view(session, packaging_session_id: str, dataset_id: str):

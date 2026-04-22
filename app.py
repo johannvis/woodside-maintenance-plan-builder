@@ -1,5 +1,6 @@
 """Maintenance Plan Builder — Streamlit entry point."""
 
+import os
 import streamlit as st
 from config import APP_TITLE, APP_ICON
 
@@ -9,6 +10,15 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
 )
+
+# Load ANTHROPIC_API_KEY from Streamlit Secrets if not already in environment
+if not os.getenv("ANTHROPIC_API_KEY"):
+    try:
+        key = st.secrets.get("ANTHROPIC_API_KEY")
+        if key:
+            os.environ["ANTHROPIC_API_KEY"] = key
+    except Exception:
+        pass
 
 # Custom CSS
 st.markdown("""
@@ -29,14 +39,19 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# Login wall — skipped automatically if [auth] not configured in secrets
+from auth.helpers import render_login_wall
+render_login_wall()
+
 st.title(f"{APP_ICON} {APP_TITLE}")
 st.caption("Automated FMECA → SAP PM packaging | Rules engine + human-in-the-loop")
 
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "1 · Ingest & Preview",
     "2 · Rule Editor",
     "3 · Review & Refine",
     "4 · Export",
+    "5 · AI Review",
     "📖 Demo Guide",
     "⚙️ Algorithm",
 ])
@@ -58,9 +73,13 @@ with tab4:
     render_export()
 
 with tab5:
+    from ui.page_agents import render as render_agents
+    render_agents()
+
+with tab6:
     with open("docs/DEMO_GUIDE.md", "r") as f:
         st.markdown(f.read())
 
-with tab6:
+with tab7:
     with open("docs/ALGORITHM.md", "r") as f:
         st.markdown(f.read())

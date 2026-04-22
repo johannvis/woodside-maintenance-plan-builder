@@ -170,6 +170,59 @@ class Operation(Base):
     source_task = relationship("Task")
 
 
+# ── Domain 5: Agent Review ────────────────────────────────────────────────────
+
+class AgentProfile(Base):
+    __tablename__ = "agent_profile"
+
+    id = Column(String, primary_key=True, default=_uuid)
+    name = Column(String, nullable=False)
+    role = Column(String, nullable=False)   # safety/cost/efficiency/integrity/judge
+    system_prompt = Column(Text)
+    scoring_weights = Column(Text)          # JSON stored as text
+    model_id = Column(String, default="claude-haiku-4-5-20251001")
+    is_active = Column(Boolean, default=True)
+
+    decisions = relationship("AgentDecision", back_populates="agent_profile",
+                             foreign_keys="AgentDecision.agent_profile_id")
+
+
+class AgentDecision(Base):
+    __tablename__ = "agent_decision"
+
+    id = Column(String, primary_key=True, default=_uuid)
+    session_id = Column(String, nullable=False)
+    maintenance_plan_item_id = Column(String, ForeignKey("maintenance_plan_item.id"))
+    agent_profile_id = Column(String, ForeignKey("agent_profile.id"))
+    score = Column(Float)                   # 0–10
+    recommended_action = Column(String)     # keep/split/merge/reclassify
+    target_item_id = Column(String, ForeignKey("maintenance_plan_item.id"), nullable=True)
+    rationale = Column(Text)
+    confidence = Column(String)             # high/medium/low
+    was_selected = Column(Boolean, default=False)
+
+    plan_item = relationship("MaintenancePlanItem", foreign_keys=[maintenance_plan_item_id])
+    agent_profile = relationship("AgentProfile", back_populates="decisions",
+                                 foreign_keys=[agent_profile_id])
+    target_item = relationship("MaintenancePlanItem", foreign_keys=[target_item_id])
+
+
+class JudgeDecision(Base):
+    __tablename__ = "judge_decision"
+
+    id = Column(String, primary_key=True, default=_uuid)
+    session_id = Column(String, nullable=False)
+    maintenance_plan_item_id = Column(String, ForeignKey("maintenance_plan_item.id"))
+    winning_agent_id = Column(String, ForeignKey("agent_profile.id"), nullable=True)
+    final_action = Column(String)
+    judge_rationale = Column(Text)
+    input_scores = Column(Text)             # JSON stored as text
+    modified = Column(Boolean, default=False)
+
+    plan_item = relationship("MaintenancePlanItem")
+    winning_agent = relationship("AgentProfile")
+
+
 # ── Domain 4: SAP Reference ───────────────────────────────────────────────────
 
 class PlannerGroup(Base):
