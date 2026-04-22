@@ -14,6 +14,8 @@ _ROLE_LABEL = {
     "cost": "Cost",
     "efficiency": "Efficiency",
     "integrity": "Integrity",
+    "coverage": "Coverage",
+    "route": "Route",
 }
 
 ACTION_EMOJI = {
@@ -105,11 +107,17 @@ def render():
     # ── Sidebar config ────────────────────────────────────────────────────────
     with st.sidebar:
         st.markdown("### Agent Config")
-        active_safety = st.checkbox("Safety Agent", value=True, key="ag_safety")
-        active_cost = st.checkbox("Cost Agent", value=True, key="ag_cost")
-        active_efficiency = st.checkbox("Efficiency Agent", value=True, key="ag_eff")
-        active_integrity = st.checkbox("Integrity Agent", value=True, key="ag_integ")
-        batch_size = st.number_input("Batch size", min_value=1, max_value=50, value=10, key="ag_batch")
+        active_safety = st.checkbox("🔒 Safety", value=True, key="ag_safety")
+        active_cost = st.checkbox("💰 Cost", value=True, key="ag_cost")
+        active_efficiency = st.checkbox("⚡ Efficiency", value=True, key="ag_eff")
+        active_integrity = st.checkbox("🔩 Integrity", value=True, key="ag_integ")
+        active_coverage = st.checkbox("📋 Coverage", value=True, key="ag_coverage")
+        active_route = st.checkbox("🗺️ Route", value=True, key="ag_route")
+        st.divider()
+        concurrency = st.slider("Concurrent items", min_value=1, max_value=20, value=5, key="ag_concurrency",
+                                help="Items reviewed in parallel. Higher = faster but more API load.")
+        max_items = st.number_input("Max items (0 = all)", min_value=0, max_value=5000, value=50, key="ag_max_items",
+                                    help="Set to 0 to review all items. Use a small number for quick tests.")
 
     active_roles = []
     if active_safety:
@@ -120,6 +128,10 @@ def render():
         active_roles.append("efficiency")
     if active_integrity:
         active_roles.append("integrity")
+    if active_coverage:
+        active_roles.append("coverage")
+    if active_route:
+        active_roles.append("route")
 
     # ── Check for existing results ────────────────────────────────────────────
     result_key = f"agent_review_result_{packaging_session_id}"
@@ -158,7 +170,8 @@ def render():
                 packaging_session_id=packaging_session_id,
                 progress_queue=progress_q,
                 active_roles=active_roles if active_roles else None,
-                batch_size=int(batch_size),
+                concurrency=int(concurrency),
+                max_items=int(max_items),
             )
 
         executor = ThreadPoolExecutor(max_workers=1)

@@ -42,7 +42,7 @@ If the secrets section is not configured, the login wall is skipped (dev mode).
 import streamlit as st
 
 
-def render_login_wall(section_key: str = "auth") -> str | None:
+def render_login_wall(section_key: str = "auth"):
     """
     Render a login wall. Returns the authenticated user's role, or None if auth is skipped.
 

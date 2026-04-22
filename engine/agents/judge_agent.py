@@ -48,7 +48,7 @@ class JudgeAgent:
             self._client = anthropic.Anthropic(api_key=api_key)
         return self._client
 
-    def adjudicate(self, item, decisions: list[dict]) -> dict:
+    def adjudicate(self, item, decisions) -> dict:
         """
         Arbitrate between specialist agent decisions.
 

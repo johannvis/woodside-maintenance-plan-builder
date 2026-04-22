@@ -10,11 +10,14 @@ from db.database import get_session
 from db.models import (
     AgentProfile, AgentDecision, JudgeDecision,
     MaintenancePlan, MaintenancePlanItem, Operation, Task, FailureMode,
+    FunctionalLocation,
 )
 from engine.agents.safety_agent import SafetyAgent
 from engine.agents.cost_agent import CostAgent
 from engine.agents.efficiency_agent import EfficiencyAgent
 from engine.agents.integrity_agent import IntegrityAgent
+from engine.agents.coverage_agent import CoverageAgent
+from engine.agents.route_agent import RouteAgent
 from engine.agents.judge_agent import JudgeAgent
 
 
@@ -23,6 +26,8 @@ ROLE_TO_CLASS = {
     "cost": CostAgent,
     "efficiency": EfficiencyAgent,
     "integrity": IntegrityAgent,
+    "coverage": CoverageAgent,
+    "route": RouteAgent,
 }
 
 ROLE_ICONS = {
@@ -30,6 +35,8 @@ ROLE_ICONS = {
     "cost": "💰",
     "efficiency": "⚡",
     "integrity": "🔩",
+    "coverage": "📋",
+    "route": "🗺️",
 }
 
 
@@ -89,14 +96,152 @@ def _build_item_context(session, item: MaintenancePlanItem) -> dict:
                     and a["frequency"] == item.frequency
                     and a["frequency_unit"] == item.frequency_unit]
 
+    # ── Spatial / coverage context ────────────────────────────────────────────
+    # Resolve FLOC hierarchy for the first source task
+    floc_hierarchy = {"l1": "", "l2": "", "l3": "", "l4": ""}
+    floc_ids_in_item = set()
+    l3_floc_id = None
+
+    for op in ops_raw:
+        src = session.get(Task, op.source_task_id) if op.source_task_id else None
+        if not src:
+            continue
+        fm = session.get(FailureMode, src.failure_mode_id) if src.failure_mode_id else None
+        if not fm:
+            continue
+        floc_ids_in_item.add(fm.functional_location_id)
+        # Walk up to L3
+        cur_id = fm.functional_location_id
+        visited = set()
+        while cur_id and cur_id not in visited:
+            visited.add(cur_id)
+            floc = session.get(FunctionalLocation, cur_id)
+            if not floc:
+                break
+            level_key = {1: "l1", 2: "l2", 3: "l3", 4: "l4"}.get(floc.level)
+            if level_key and not floc_hierarchy[level_key]:
+                floc_hierarchy[level_key] = floc.name
+            if floc.level == 3 and l3_floc_id is None:
+                l3_floc_id = floc.id
+            cur_id = floc.parent_id
+
+    # Count all equipment (L4) under the same L3 parent
+    total_equipment_in_l3 = 0
+    if l3_floc_id:
+        total_equipment_in_l3 = (
+            session.query(FunctionalLocation)
+            .filter(
+                FunctionalLocation.parent_id == l3_floc_id,
+                FunctionalLocation.level == 4,
+            )
+            .count()
+        )
+
+    # Coverage: all disciplines + task types in the FMECA for this L3 area
+    all_disciplines_in_floc = set()
+    all_task_types_in_floc = set()
+    disciplines_covered_by_other_items = set()
+
+    if l3_floc_id and plan:
+        # All tasks for FLOCs under this L3
+        l4_flocs = session.query(FunctionalLocation).filter(
+            FunctionalLocation.parent_id == l3_floc_id
+        ).all()
+        l4_ids = {f.id for f in l4_flocs}
+
+        all_fms = session.query(FailureMode).filter(
+            FailureMode.functional_location_id.in_(l4_ids)
+        ).all()
+        for fm in all_fms:
+            for t in fm.tasks:
+                if t.resource_type:
+                    all_disciplines_in_floc.add(t.resource_type.upper())
+                if t.task_type:
+                    all_task_types_in_floc.add(t.task_type.upper())
+
+        # Disciplines covered by OTHER plan items
+        for adj in plan.items:
+            if adj.id == item.id:
+                continue
+            adj_tl = adj.task_list
+            if not adj_tl:
+                continue
+            for op in adj_tl.operations:
+                if op.resource_type:
+                    disciplines_covered_by_other_items.add(op.resource_type.upper())
+
+    # Route: other plan items in the same session with same L3 + same resource + same interval
+    item_resource = source_tasks[0]["resource_type"].upper() if source_tasks else ""
+    same_area_same_resource_items = []
+
+    if l3_floc_id and plan:
+        # Get all items in the packaging session
+        session_items = (
+            session.query(MaintenancePlanItem)
+            .filter(MaintenancePlanItem.session_id == item.session_id)
+            .all()
+        )
+        for si in session_items:
+            if si.id == item.id:
+                continue
+            if si.frequency != item.frequency or si.frequency_unit != item.frequency_unit:
+                continue
+            si_tl = si.task_list
+            if not si_tl:
+                continue
+            # Check if any operation in this item is under the same L3
+            si_resource = ""
+            si_in_same_area = False
+            for op in si_tl.operations:
+                if op.resource_type:
+                    si_resource = op.resource_type.upper()
+                src = session.get(Task, op.source_task_id) if op.source_task_id else None
+                if not src:
+                    continue
+                fm = session.get(FailureMode, src.failure_mode_id) if src.failure_mode_id else None
+                if not fm:
+                    continue
+                cur_id = fm.functional_location_id
+                visited = set()
+                while cur_id and cur_id not in visited:
+                    visited.add(cur_id)
+                    floc = session.get(FunctionalLocation, cur_id)
+                    if not floc:
+                        break
+                    if floc.level == 3 and floc.id == l3_floc_id:
+                        si_in_same_area = True
+                        break
+                    cur_id = floc.parent_id
+                if si_in_same_area:
+                    break
+
+            if si_in_same_area and si_resource == item_resource:
+                same_area_same_resource_items.append({
+                    "id": si.id,
+                    "description": si.description or "",
+                    "frequency": si.frequency,
+                    "frequency_unit": si.frequency_unit or "",
+                    "total_duration_hours": si.total_duration_hours or 0,
+                    "op_count": len(si_tl.operations),
+                })
+
     return {
         "operations": operations,
         "source_tasks": source_tasks,
         "adjacent_items": adjacent_items,
         "items_in_plan": len(plan.items) if plan else 0,
-        "resource_type": source_tasks[0]["resource_type"] if source_tasks else "",
+        "resource_type": item_resource,
         "shutdown_items_in_plan": len(shutdown_items),
         "online_items_in_plan": len(online_items),
+        # Spatial
+        "floc_hierarchy": floc_hierarchy,
+        "equipment_count_in_item": len(floc_ids_in_item),
+        "total_equipment_in_l3": total_equipment_in_l3,
+        "same_area_same_resource_items": same_area_same_resource_items,
+        # Coverage
+        "all_disciplines_in_floc": list(all_disciplines_in_floc),
+        "all_task_types_in_floc": list(all_task_types_in_floc),
+        "disciplines_covered_by_other_items": disciplines_covered_by_other_items,
     }
 
 
@@ -189,11 +334,7 @@ def _review_item(session, item: MaintenancePlanItem, specialist_agents: list,
 
 
 def _seed_default_agents_if_needed(session):
-    """Seed default agent profiles if none exist."""
-    count = session.query(AgentProfile).count()
-    if count > 0:
-        return
-
+    """Seed any missing default agent profiles (by role)."""
     import json as _json
     import os
     seed_path = os.path.join(os.path.dirname(__file__), "..", "db", "seed", "default_agents.json")
@@ -204,7 +345,12 @@ def _seed_default_agents_if_needed(session):
     with open(seed_path, "r") as f:
         profiles = _json.load(f)
 
+    existing_roles = {r[0] for r in session.query(AgentProfile.role).all()}
+
+    added = 0
     for p in profiles:
+        if p["role"] in existing_roles:
+            continue
         ap = AgentProfile(
             name=p["name"],
             role=p["role"],
@@ -214,32 +360,70 @@ def _seed_default_agents_if_needed(session):
             scoring_weights=_json.dumps(p.get("scoring_weights", {})),
         )
         session.add(ap)
-    session.commit()
+        added += 1
+
+    if added:
+        session.commit()
+
+
+class _ProfileStub:
+    """Lightweight non-ORM copy of AgentProfile safe to pass across threads."""
+    __slots__ = ("id", "name", "role", "model_id", "system_prompt", "scoring_weights", "is_active")
+
+    def __init__(self, profile):
+        self.id = profile.id
+        self.name = profile.name
+        self.role = profile.role
+        self.model_id = profile.model_id
+        self.system_prompt = profile.system_prompt
+        self.scoring_weights = profile.scoring_weights
+        self.is_active = profile.is_active
+
+
+def _process_item(item_id, specialist_stubs, judge_stub, packaging_session_id):
+    """
+    Worker function — runs in its own thread with its own DB session.
+    Each item's 4 specialist agents also run in parallel inside here.
+    """
+    session = get_session()
+    try:
+        item = session.get(MaintenancePlanItem, item_id)
+        if not item:
+            return {"item_id": item_id, "item_description": item_id[:8],
+                    "final_action": "keep", "has_consensus": True, "scores": {}, "error": "Item not found"}
+
+        specialist_agents = [ROLE_TO_CLASS[s.role](s) for s in specialist_stubs if s.role in ROLE_TO_CLASS]
+        judge_agent = JudgeAgent(judge_stub) if judge_stub else None
+        return _review_item(session, item, specialist_agents, judge_agent, packaging_session_id)
+    except Exception as e:
+        return {"item_id": item_id, "item_description": item_id[:8],
+                "final_action": "keep", "has_consensus": True, "scores": {}, "error": str(e)}
+    finally:
+        session.close()
 
 
 def run_agent_review(
     packaging_session_id: str,
     progress_queue: queue.Queue,
-    active_roles: list[str] | None = None,
-    batch_size: int = 10,
+    active_roles=None,
+    concurrency: int = 5,
+    max_items: int = 0,
 ) -> dict:
     """
-    Run multi-agent review on all plan items for a packaging session.
+    Run multi-agent review on plan items for a packaging session.
 
-    Called from Streamlit via ThreadPoolExecutor (runs in separate thread).
-    Pushes progress dicts to progress_queue. Returns summary stats.
+    Items are processed concurrently (`concurrency` at a time).
+    Set max_items > 0 to review only a sample.
 
-    Progress dict shape:
+    Pushes progress dicts to progress_queue:
         {"type": "progress", "done": int, "total": int, "item": {...}}
         {"type": "done", "summary": {...}}
         {"type": "error", "message": str}
     """
     session = get_session()
     try:
-        # Ensure default agents exist
         _seed_default_agents_if_needed(session)
 
-        # Load active agent profiles
         query = session.query(AgentProfile).filter(AgentProfile.is_active == True)
         if active_roles:
             query = query.filter(AgentProfile.role.in_(active_roles + ["judge"]))
@@ -252,13 +436,10 @@ def run_agent_review(
             progress_queue.put({"type": "error", "message": "No active specialist agent profiles found."})
             return {}
 
-        # Instantiate agents
-        specialist_agents = [
-            ROLE_TO_CLASS[p.role](p) for p in specialist_profiles if p.role in ROLE_TO_CLASS
-        ]
-        judge_agent = JudgeAgent(judge_profiles[0]) if judge_profiles else None
+        # Serialise ORM profiles to thread-safe stubs
+        specialist_stubs = [_ProfileStub(p) for p in specialist_profiles]
+        judge_stub = _ProfileStub(judge_profiles[0]) if judge_profiles else None
 
-        # Load all plan items
         items = (
             session.query(MaintenancePlanItem)
             .filter(MaintenancePlanItem.session_id == packaging_session_id)
@@ -269,51 +450,52 @@ def run_agent_review(
             progress_queue.put({"type": "error", "message": "No plan items found for this session."})
             return {}
 
-        total = len(items)
-        done = 0
-        action_summary = Counter()
+        if max_items and max_items < len(items):
+            import random
+            items = random.sample(items, max_items)
 
-        for i in range(0, total, batch_size):
-            batch = items[i: i + batch_size]
-            for item in batch:
-                try:
-                    result = _review_item(session, item, specialist_agents, judge_agent, packaging_session_id)
-                    action_summary[result["final_action"]] += 1
-                    done += 1
-                    progress_queue.put({
-                        "type": "progress",
-                        "done": done,
-                        "total": total,
-                        "item": result,
-                    })
-                except Exception as e:
-                    done += 1
-                    progress_queue.put({
-                        "type": "progress",
-                        "done": done,
-                        "total": total,
-                        "item": {
-                            "item_id": item.id,
-                            "item_description": item.description or item.id[:8],
-                            "final_action": "keep",
-                            "has_consensus": True,
-                            "scores": {},
-                            "error": str(e),
-                        },
-                    })
+        # Collect just IDs — ORM objects must not cross thread boundaries
+        item_ids = [item.id for item in items]
 
-        summary = {
-            "total": total,
-            "keep": action_summary.get("keep", 0),
-            "split": action_summary.get("split", 0),
-            "merge": action_summary.get("merge", 0),
-            "reclassify": action_summary.get("reclassify", 0),
-        }
-        progress_queue.put({"type": "done", "summary": summary})
-        return summary
-
-    except Exception as e:
-        progress_queue.put({"type": "error", "message": str(e)})
-        return {}
     finally:
         session.close()
+
+    total = len(item_ids)
+    done = 0
+    action_summary = Counter()
+
+    with ThreadPoolExecutor(max_workers=concurrency) as pool:
+        futures = {
+            pool.submit(_process_item, iid, specialist_stubs, judge_stub, packaging_session_id): iid
+            for iid in item_ids
+        }
+        for future in as_completed(futures):
+            try:
+                result = future.result()
+            except Exception as e:
+                result = {
+                    "item_id": futures[future],
+                    "item_description": futures[future][:8],
+                    "final_action": "keep",
+                    "has_consensus": True,
+                    "scores": {},
+                    "error": str(e),
+                }
+            action_summary[result.get("final_action", "keep")] += 1
+            done += 1
+            progress_queue.put({
+                "type": "progress",
+                "done": done,
+                "total": total,
+                "item": result,
+            })
+
+    summary = {
+        "total": total,
+        "keep": action_summary.get("keep", 0),
+        "split": action_summary.get("split", 0),
+        "merge": action_summary.get("merge", 0),
+        "reclassify": action_summary.get("reclassify", 0),
+    }
+    progress_queue.put({"type": "done", "summary": summary})
+    return summary

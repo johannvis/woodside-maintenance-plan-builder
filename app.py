@@ -50,8 +50,8 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "1 · Ingest & Preview",
     "2 · Rule Editor",
     "3 · Review & Refine",
-    "4 · Export",
-    "5 · AI Review",
+    "4 · AI Review",
+    "5 · Export",
     "📖 Demo Guide",
     "⚙️ Algorithm",
 ])
@@ -69,12 +69,12 @@ with tab3:
     render_review()
 
 with tab4:
-    from ui.page_export import render as render_export
-    render_export()
-
-with tab5:
     from ui.page_agents import render as render_agents
     render_agents()
+
+with tab5:
+    from ui.page_export import render as render_export
+    render_export()
 
 with tab6:
     with open("docs/DEMO_GUIDE.md", "r") as f:

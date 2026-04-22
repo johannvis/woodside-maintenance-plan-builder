@@ -45,6 +45,7 @@ DB → page_review.py → user refinement → page_export.py → Excel/CSV/JSON
 - Note: the GitHub repo name still contains "woodside" (rename via GitHub Settings → Repository name if needed)
 - No CI/CD pipeline — deployment is purely git push → Streamlit Cloud webhook
 - SQLite DB is ephemeral on Streamlit Cloud — resets on every redeployment; demo always starts from a fresh DB
+- **Live app URL: https://maint-plan-build.streamlit.app**
 
 ## Working Style
 - When asked to implement something ("can you do it?"), go all the way: write code → commit → push, without stopping mid-task to ask for confirmation

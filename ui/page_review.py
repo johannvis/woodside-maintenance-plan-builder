@@ -115,7 +115,7 @@ def _get_ai_reviewed_items(session, packaging_session_id: str) -> set:
     return jd_ids | ad_ids
 
 
-def _get_agent_review_detail(session, item_id: str, packaging_session_id: str) -> dict | None:
+def _get_agent_review_detail(session, item_id: str, packaging_session_id: str):
     """Return agent decisions and judge decision for an item."""
     decisions = (
         session.query(AgentDecision)
