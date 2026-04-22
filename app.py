@@ -2,6 +2,27 @@
 
 import os
 import streamlit as st
+
+# Resolve DATABASE_URL BEFORE importing config (which evaluates it at module load).
+# If not in our secrets, explicitly clear any system-injected value so SQLite is used.
+try:
+    _db_secret = st.secrets.get("DATABASE_URL")
+    if _db_secret:
+        os.environ["DATABASE_URL"] = _db_secret
+    else:
+        os.environ.pop("DATABASE_URL", None)
+except Exception:
+    os.environ.pop("DATABASE_URL", None)
+
+# Load remaining secrets into environment
+try:
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        _v = st.secrets.get("ANTHROPIC_API_KEY")
+        if _v:
+            os.environ["ANTHROPIC_API_KEY"] = _v
+except Exception:
+    pass
+
 from config import APP_TITLE, APP_ICON
 
 st.set_page_config(
@@ -10,16 +31,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
 )
-
-# Load secrets into environment before anything else
-try:
-    for _k in ("ANTHROPIC_API_KEY", "DATABASE_URL"):
-        if not os.getenv(_k):
-            _v = st.secrets.get(_k)
-            if _v:
-                os.environ[_k] = _v
-except Exception:
-    pass
 
 # Ensure all DB tables exist (safe to call on every boot — no-op if already created)
 from db.database import init_db
