@@ -151,4 +151,76 @@ These can all be adjusted live in the Rule Editor without touching code.
 
 ---
 
-*Algorithm implemented in `engine/packager.py` | Rule evaluators in `engine/rules.py`*
+## AI Review — Multi-Agent Analysis
+
+After the rules engine produces a draft plan, six specialist AI agents review each plan item in parallel and a judge agent arbitrates disagreements.
+
+```
+Draft MaintenancePlan (from packager.py)
+        │
+        ▼
+AgentOrchestrator — for each MaintenancePlanItem:
+        ├─ 🔒 Safety Agent      → score (0–10) + action + rationale
+        ├─ 💰 Cost Agent        → score (0–10) + action + rationale
+        ├─ ⚡ Efficiency Agent  → score (0–10) + action + rationale
+        ├─ 🔩 Integrity Agent   → score (0–10) + action + rationale
+        ├─ 📋 Coverage Agent    → score (0–10) + action + rationale
+        └─ 🗺️ Route Agent       → score (0–10) + action + rationale
+                │
+                ▼
+        Majority consensus? ─── Yes ──→ action accepted (keep/split/merge/reclassify)
+                │
+               No
+                │
+                ▼
+        ⚖️ Judge Agent → weighted arbitration → final action
+        │
+        ▼
+AgentDecision + JudgeDecision records stored in DB
+        │
+        ▼
+🤖 badges + score bars shown in Plan View (Tab 3)
+```
+
+### Specialist Agents
+
+Each agent is a focused reviewer with a domain-specific system prompt, configurable via the **⚙️ Agent Configuration** panel in Tab 4.
+
+| Agent | Core question | Key signals |
+|-------|--------------|-------------|
+| 🔒 **Safety** | Are compliance tasks isolated? Are critical FMs at the right frequency? | `is_regulatory`, `criticality`, `is_online` |
+| 💰 **Cost** | Are similar tasks bundled to minimise travel and setup overhead? | `resource_type`, `total_duration_hours`, adjacent items |
+| ⚡ **Efficiency** | Are shutdown tasks consolidated? Is online maintenance maximised? | `is_online`, `interval`, item count |
+| 🔩 **Integrity** | Are A-class FMs traceable and at the correct frequency? | `criticality`, `failure_mode`, `interval` |
+| 📋 **Coverage** | Are all disciplines and task types from the FMECA represented in the plan? | `all_disciplines_in_floc`, `disciplines_covered_by_other_items` |
+| 🗺️ **Route** | Would the same trade need multiple trips to the same physical area? | `floc_hierarchy` L3, `same_area_same_resource_items` |
+
+### Context Passed to Each Agent
+
+Every agent receives the same rich context for the item under review:
+
+- Operations list (description, duration, resource, materials)
+- Source task data (failure mode, criticality, task type, is_online, is_regulatory)
+- FLOC hierarchy (L1 → L4 names) for spatial reasoning
+- Adjacent items in the same plan (for merge/split suggestions)
+- Cross-plan context: all other items in the same L3 area with the same resource and interval (route fragmentation signal)
+- Coverage context: all disciplines present across the whole FLOC vs. those covered by other items
+
+Agents use Anthropic tool-use to return structured JSON — score, recommended action, and rationale — not free text.
+
+### Consensus and Judge
+
+- **Consensus rule:** if ≥ 4 of 6 agents recommend the same action → accepted without judge
+- **Judge invoked:** when no single action has majority support
+- **Judge model:** `claude-sonnet-4-6` (more reasoning capacity than the specialist Haiku agents)
+- **Judge weights (configurable):** Safety 35% · Integrity 25% · Efficiency 20% · Cost 20%
+- Safety and integrity concerns override cost and efficiency — an unsafe plan is never acceptable regardless of cost savings
+
+### Iterative Refinement
+
+The agent prompts and weights are fully editable from the UI. After editing, **🔄 Clear & Re-run** deletes the previous decisions for the current packaging session and re-runs from scratch. No re-packaging required — the draft plan is preserved and only the AI review layer is refreshed.
+
+---
+
+*Rules engine: `engine/packager.py` + `engine/rules.py`*
+*AI review: `engine/agent_orchestrator.py` + `engine/agents/`*

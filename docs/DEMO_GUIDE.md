@@ -96,9 +96,45 @@ Open with this framing:
 
 ---
 
-## Step 4 — Export (2 minutes)
+## Step 4 — AI Review (5 minutes)
 
-1. Click **Tab 4: Export**
+1. Click **Tab 4: AI Review**
+2. Expand **"⚙️ Agent Configuration"** — show the six specialist agent tabs and the Judge weight sliders
+3. Leave defaults and click **"▶ Run AI Review"**
+4. Point out the live streaming feed as items are processed in parallel
+5. After completion, show the summary metrics: Kept / Split / Merged / Reclassified counts
+6. Switch back to **Tab 3 → Plan View** — items reviewed by AI now show a **🤖 badge**
+7. Click a badged item and expand the **"🤖 Agent Review"** section in the right panel:
+   - Six coloured score bars (one per agent)
+   - Judge decision + rationale
+
+### What each agent is looking for
+
+| Agent | Focus |
+|-------|-------|
+| 🔒 **Safety** | Regulatory tasks properly isolated; A-class FMs at correct frequency; no unsafe online/shutdown mixing |
+| 💰 **Cost** | Over-splitting penalty; single-operation items that should be merged; bundling opportunity with same resource/interval |
+| ⚡ **Efficiency** | Shutdown tasks consolidated; online maintenance maximised; interval aligned to plant windows |
+| 🔩 **Integrity** | A-class failure modes traceable and at correct frequency; B/C-class not diluting A-class items |
+| 📋 **Coverage** | All disciplines (MECH, ELEC, INST…) and task types present in source FMECA are represented across the plan |
+| 🗺️ **Route** | Same trade + same L3 area + same interval = one walk-around route; flags unnecessary fragmentation |
+
+The **⚖️ Judge** is invoked only when agents disagree. It applies configurable weights (Safety 35% / Integrity 25% / Efficiency 20% / Cost 20%) to make a final call: keep, split, merge, or reclassify.
+
+**Key message:**
+*"This replicates the multi-discipline deliberation that 40–50 contractors previously brought to the packaging review. Six perspectives, in parallel, in seconds. The planner can tweak any agent's prompt and click 'Clear & Re-run' to iterate — no code changes needed."*
+
+### Iterative refinement
+
+8. Click **"⚙️ Agent Configuration"**, edit a system prompt (e.g. make the Cost agent more aggressive about merging), click **💾 Save**
+9. Click **"🔄 Clear & Re-run"** — this wipes the previous decisions and runs fresh with the updated prompts
+10. Compare results
+
+---
+
+## Step 5 — Export (2 minutes)
+
+1. Click **Tab 5: Export**
 2. Leave format as **"Data Mate Staging (.xlsx)"**
 3. Show the include checkboxes — everything is ticked by default including FMECA traceability and rule audit
 4. Point out the **preview table** (first 20 rows of the flat output)
@@ -116,24 +152,26 @@ Open with this framing:
 
 ## Bonus — Algorithm Explainer (optional, 2 minutes)
 
-1. Click **Tab 6: ⚙️ Algorithm**
+1. Click **Tab 7: ⚙️ Algorithm**
 2. Walk through the 9-step packaging logic — useful if the audience wants to understand what's happening under the hood or discuss customisation
 
 ---
 
 ## Closing (1 minute)
 
-> "What you've just seen took about 10 seconds to run. The manual equivalent in Crystallize takes a team of contractors several weeks. The rules are configurable, the output is SAP-ready, and every decision is traceable back to the FMECA. This same pattern could be extended to any asset class — LNG, pipelines, utilities — just by loading a different FMECA and adjusting the rules."
+> "What you've just seen took about 10 seconds to run. The manual equivalent in Crystallize takes a team of contractors several weeks. The rules are configurable, the AI review replicates multi-discipline expert deliberation, the output is SAP-ready, and every decision is traceable back to the FMECA. This same pattern could be extended to any asset class — LNG, pipelines, utilities — just by loading a different FMECA and adjusting the rules."
 
 **Potential follow-up questions:**
 
 | Question | Answer |
 |----------|--------|
 | Can it handle real client data? | Yes — upload any FMECA workbook on Tab 1. The column mapper handles common naming variations automatically. |
-| What about edge cases the rules don't cover? | The review step (Tab 3) is specifically for that — planners can move individual operations between items. |
-| How would we deploy this? | Docker container on EC2, same pattern as the MainStream demo. Or Streamlit Community Cloud for quick sharing. |
+| What about edge cases the rules don't cover? | The review step (Tab 3) is specifically for that — planners can move individual operations between items. The AI Review flags the same issues automatically. |
+| How would we deploy this? | Currently live on Streamlit Community Cloud. Production deployment would be a Docker container on EC2 with a PostgreSQL database for persistence. |
 | Can we add more rules? | Yes — each rule type is an isolated class in `engine/rules.py`. Adding a new rule = adding one class. |
+| Can we add more agents? | Yes — each agent is a class in `engine/agents/`. Adding a new perspective = adding one class and a row in the default_agents seed file. |
 | What's the AI Insights feature doing? | Claude Haiku is called via the Anthropic API against the packaging output. It's a lightweight analytical layer — not making packaging decisions, just surfacing patterns for the planner. |
+| What does the Route agent actually check? | It uses the FLOC L3 sub-system hierarchy as a spatial proxy — equipment under the same L3 node is physically co-located. The agent flags cases where the same trade would need multiple separate trips to the same area. |
 
 ---
 
