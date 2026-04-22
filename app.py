@@ -11,14 +11,19 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# Load ANTHROPIC_API_KEY from Streamlit Secrets if not already in environment
-if not os.getenv("ANTHROPIC_API_KEY"):
-    try:
-        key = st.secrets.get("ANTHROPIC_API_KEY")
-        if key:
-            os.environ["ANTHROPIC_API_KEY"] = key
-    except Exception:
-        pass
+# Load secrets into environment before anything else
+try:
+    for _k in ("ANTHROPIC_API_KEY", "DATABASE_URL"):
+        if not os.getenv(_k):
+            _v = st.secrets.get(_k)
+            if _v:
+                os.environ[_k] = _v
+except Exception:
+    pass
+
+# Ensure all DB tables exist (safe to call on every boot — no-op if already created)
+from db.database import init_db
+init_db()
 
 # Custom CSS
 st.markdown("""
