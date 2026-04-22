@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL") or "sqlite:///maintenance.db"
+DATABASE_URL = os.getenv("DATABASE_URL") or "sqlite:////tmp/maintenance.db"
 
 DEFAULT_DATASET_PATH = "Data/LNG_Train_FLOC_FMECA_Synthetic_plus.xlsx"
 DEFAULT_RULES_PATH = "db/seed/default_rules.json"
