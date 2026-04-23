@@ -218,6 +218,33 @@ def _render_pending_actions(session, packaging_session_id: str) -> None:
     if not pending:
         return
 
+    # Batch-load all agent decisions for pending items (avoid N+1 queries)
+    pending_item_ids = [item.id for _, item in pending]
+    all_ads = (
+        session.query(AgentDecision, AgentProfile)
+        .join(AgentProfile, AgentDecision.agent_profile_id == AgentProfile.id)
+        .filter(
+            AgentDecision.session_id == packaging_session_id,
+            AgentDecision.maintenance_plan_item_id.in_(pending_item_ids),
+        )
+        .all()
+    )
+    # Group by item_id → {role: (action, target_item_id)}
+    item_agent_votes: dict = defaultdict(dict)
+    item_merge_targets: dict = defaultdict(list)  # item_id → [target_item_id, ...]
+    for ad, profile in all_ads:
+        item_agent_votes[ad.maintenance_plan_item_id][profile.role] = ad.recommended_action
+        if ad.recommended_action == "merge" and ad.target_item_id:
+            item_merge_targets[ad.maintenance_plan_item_id].append(ad.target_item_id)
+
+    # Resolve merge target descriptions in one pass
+    all_target_ids = {tid for tids in item_merge_targets.values() for tid in tids}
+    target_items = {
+        t.id: t for t in session.query(MaintenancePlanItem).filter(
+            MaintenancePlanItem.id.in_(all_target_ids)
+        ).all()
+    } if all_target_ids else {}
+
     action_counts = Counter(jd.final_action for jd, _ in pending)
     badges = " · ".join(
         f"{_ACTION_EMOJI.get(a, '?')} {a.capitalize()}: **{n}**"
@@ -252,14 +279,35 @@ def _render_pending_actions(session, packaging_session_id: str) -> None:
             action = jd.final_action
             colour = _ACTION_COLOUR.get(action, "#888")
             emoji = _ACTION_EMOJI.get(action, "?")
-            desc = (item.description or item.id[:12])[:60]
-            rationale = (jd.judge_rationale or "—")[:160]
+            desc = (item.description or item.id[:12])[:55]
+            rationale = (jd.judge_rationale or "—")[:200]
 
-            c_act, c_desc, c_rat, c_btns = st.columns([1, 2, 3, 2])
+            # Build agent vote summary: group roles by their recommended action
+            votes = item_agent_votes.get(item.id, {})
+            vote_groups: dict = defaultdict(list)
+            for role, voted_action in votes.items():
+                icon = _ROLE_ICONS.get(role, "?")
+                vote_groups[voted_action].append(icon)
+            vote_summary = "  ".join(
+                f"{''.join(icons)} → **{act}**"
+                for act, icons in sorted(vote_groups.items(), key=lambda x: x[0] != action)
+            )
+
+            # Resolve merge target name
+            merge_target_label = ""
+            if action == "merge":
+                tids = item_merge_targets.get(item.id, [])
+                if tids:
+                    top_tid = Counter(tids).most_common(1)[0][0]
+                    t = target_items.get(top_tid)
+                    merge_target_label = (t.description or top_tid[:12])[:50] if t else top_tid[:20]
+
+            # Layout: action | item description + votes | rationale + merge target | buttons
+            c_act, c_desc, c_rat, c_btns = st.columns([1, 2.5, 3, 1.8])
 
             with c_act:
                 st.markdown(
-                    f'<div style="margin-top:4px;">{emoji} '
+                    f'<div style="margin-top:6px;">{emoji} '
                     f'<span style="font-weight:700;color:{colour};">{action.upper()}</span></div>',
                     unsafe_allow_html=True,
                 )
@@ -271,7 +319,11 @@ def _render_pending_actions(session, packaging_session_id: str) -> None:
                     item_badges.append("🔒")
                 item_badges.append(f"⏱️ {item.frequency}{item.frequency_unit[0] if item.frequency_unit else ''}")
                 st.markdown(f"**{desc}**  " + " ".join(item_badges))
+                if vote_summary:
+                    st.caption(vote_summary)
             with c_rat:
+                if merge_target_label:
+                    st.caption(f"**→ into:** {merge_target_label}")
                 st.caption(rationale)
             with c_btns:
                 b1, b2 = st.columns(2)
