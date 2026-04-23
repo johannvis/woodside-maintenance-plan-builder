@@ -270,7 +270,7 @@ def _review_item(session, item: MaintenancePlanItem, specialist_agents: list,
     # Determine consensus
     action_counts = Counter(d.get("recommended_action", "keep") for d in decisions)
     top_action, top_count = action_counts.most_common(1)[0]
-    has_consensus = top_count >= 3  # ≥3 of 4 agree
+    has_consensus = top_count >= 4  # ≥4 of 6 agents agree
 
     judge_result = None
     if not has_consensus and judge_agent:
@@ -292,6 +292,7 @@ def _review_item(session, item: MaintenancePlanItem, specialist_agents: list,
             agent_profile_id=profile.id if profile else None,
             score=d.get("score", 5.0),
             recommended_action=d.get("recommended_action", "keep"),
+            target_item_id=d.get("target_item_id"),
             rationale=d.get("rationale", ""),
             confidence=d.get("confidence", "low"),
             was_selected=is_winning,
@@ -334,7 +335,7 @@ def _review_item(session, item: MaintenancePlanItem, specialist_agents: list,
 
 
 def _seed_default_agents_if_needed(session):
-    """Seed any missing default agent profiles (by role)."""
+    """Upsert default agent profiles from seed file (insert missing, update prompts for existing)."""
     import json as _json
     import os
     seed_path = os.path.join(os.path.dirname(__file__), "..", "db", "seed", "default_agents.json")
@@ -345,24 +346,38 @@ def _seed_default_agents_if_needed(session):
     with open(seed_path, "r") as f:
         profiles = _json.load(f)
 
-    existing_roles = {r[0] for r in session.query(AgentProfile.role).all()}
+    existing_by_role = {
+        r.role: r for r in session.query(AgentProfile).all()
+    }
 
-    added = 0
+    changed = 0
     for p in profiles:
-        if p["role"] in existing_roles:
-            continue
-        ap = AgentProfile(
-            name=p["name"],
-            role=p["role"],
-            model_id=p.get("model_id", "claude-haiku-4-5-20251001"),
-            is_active=p.get("is_active", True),
-            system_prompt=p.get("system_prompt", ""),
-            scoring_weights=_json.dumps(p.get("scoring_weights", {})),
-        )
-        session.add(ap)
-        added += 1
+        existing = existing_by_role.get(p["role"])
+        if existing:
+            # Update prompt and model if the seed file has changed
+            new_prompt = p.get("system_prompt", "")
+            new_model = p.get("model_id", "claude-haiku-4-5-20251001")
+            new_weights = _json.dumps(p.get("scoring_weights", {}))
+            if (existing.system_prompt != new_prompt
+                    or existing.model_id != new_model
+                    or existing.scoring_weights != new_weights):
+                existing.system_prompt = new_prompt
+                existing.model_id = new_model
+                existing.scoring_weights = new_weights
+                changed += 1
+        else:
+            ap = AgentProfile(
+                name=p["name"],
+                role=p["role"],
+                model_id=p.get("model_id", "claude-haiku-4-5-20251001"),
+                is_active=p.get("is_active", True),
+                system_prompt=p.get("system_prompt", ""),
+                scoring_weights=_json.dumps(p.get("scoring_weights", {})),
+            )
+            session.add(ap)
+            changed += 1
 
-    if added:
+    if changed:
         session.commit()
 
 
