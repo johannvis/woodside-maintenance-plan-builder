@@ -74,6 +74,17 @@ Open with this framing:
    - **FMECA Traceability table** — links each operation back to its original failure mode and criticality
 7. **Human-in-the-loop demo:** Use the "Move Operation to Another Item" dropdown to move one operation to a different item, then click **Move**. The duration bar updates.
 
+### Pending Agent Actions queue (after AI Review)
+
+If AI Review has been run, a **"🤖 Pending Agent Actions"** panel appears at the top of Plan View showing every non-keep recommendation awaiting action:
+
+- **🔗 Merge** items have a **✓ Apply** button — one click moves all operations to the agent-nominated target, re-numbers them, and updates durations. No manual intervention needed.
+- **✂️ Split** and **🏷️ Reclassify** items have a **🔍 Review** button — jumps directly to that item in the plan tree so the planner can inspect and act.
+- **✕ Dismiss** removes any item from the queue without applying it.
+- **Apply All Merges** and **Dismiss All** bulk controls for processing the full queue quickly.
+
+*This is the human-in-the-loop approval gate: agents recommend, planner approves.*
+
 ### Equipment View
 
 8. Switch the **View Mode** toggle to **Equipment View**
@@ -92,7 +103,7 @@ Open with this framing:
 15. Claude Haiku analyses the packaging output and surfaces benchmark observations — e.g. items running close to the duration cap, regulatory task concentration, items with unusually high operation counts
 
 **Key message:**
-*"The algorithm does 90% of the work in seconds. The planner has three lenses — Plan View for structured review, Equipment View for asset-centric checks, and Packaging Trace for full auditability."*
+*"The algorithm does 90% of the work in seconds. The planner has three lenses — Plan View (with agent action queue), Equipment View for asset-centric checks, and Packaging Trace for full auditability. Merge recommendations execute in one click; split and reclassify go to the human for final call."*
 
 ---
 
@@ -128,7 +139,7 @@ The **⚖️ Judge** is invoked only when agents disagree. It applies configurab
 
 8. Click **"⚙️ Agent Configuration"**, edit a system prompt (e.g. make the Cost agent more aggressive about merging), click **💾 Save**
 9. Click **"🔄 Clear & Re-run"** — this wipes the previous decisions and runs fresh with the updated prompts
-10. Compare results
+10. Compare results — the Pending Actions queue in Tab 3 updates automatically to reflect the new decisions
 
 ---
 
@@ -166,7 +177,7 @@ The **⚖️ Judge** is invoked only when agents disagree. It applies configurab
 | Question | Answer |
 |----------|--------|
 | Can it handle real client data? | Yes — upload any FMECA workbook on Tab 1. The column mapper handles common naming variations automatically. |
-| What about edge cases the rules don't cover? | The review step (Tab 3) is specifically for that — planners can move individual operations between items. The AI Review flags the same issues automatically. |
+| What about edge cases the rules don't cover? | The review step (Tab 3) is specifically for that — planners can move individual operations between items. The AI Review flags the same issues automatically and queues them for one-click action. |
 | How would we deploy this? | Currently live on Streamlit Community Cloud. Production deployment would be a Docker container on EC2 with a PostgreSQL database for persistence. |
 | Can we add more rules? | Yes — each rule type is an isolated class in `engine/rules.py`. Adding a new rule = adding one class. |
 | Can we add more agents? | Yes — each agent is a class in `engine/agents/`. Adding a new perspective = adding one class and a row in the default_agents seed file. |

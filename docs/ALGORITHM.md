@@ -222,5 +222,51 @@ The agent prompts and weights are fully editable from the UI. After editing, **�
 
 ---
 
+## Pending Actions Queue & Plan Mutator
+
+After the AI review completes, non-keep decisions are surfaced in the **"🤖 Pending Agent Actions"** panel at the top of the Plan View (Tab 3). This is the human-in-the-loop approval gate between agent recommendation and plan change.
+
+```
+AgentDecision + JudgeDecision (DB)
+        │
+        ▼
+Pending Actions Queue (page_review.py)
+  ├─ 🔗 Merge    → ✓ Apply  ──→ engine/plan_mutator.apply_merge()
+  ├─ ✂️ Split    → 🔍 Review ──→ jump to item in plan tree (manual)
+  ├─ 🏷️ Reclassify → 🔍 Review ──→ jump to item in plan tree (manual)
+  └─ ✕ Dismiss  → mark JudgeDecision.modified = True (remove from queue)
+```
+
+### What each action does
+
+| Action | Automated? | What happens |
+|--------|-----------|-------------|
+| **Merge** | ✅ Full auto | All operations from source item moved to agent-nominated target. Operation numbers re-sequenced. Duration totals updated on both items. `JudgeDecision.modified = True`. |
+| **Split** | ⬜ Manual | Queue routes planner to the item. Planner uses "Move Operation" controls to split manually. Future: auto-split once agents specify the operation partition. |
+| **Reclassify** | ⬜ Manual | Queue routes planner to the item for interval/type adjustment. Future: auto-apply once agents output the new classification values. |
+| **Keep** | N/A | Never appears in queue. No action required. |
+
+### Merge target resolution
+
+When applying a merge, the mutator queries all `AgentDecision` rows for the source item where `recommended_action = "merge"` and `target_item_id IS NOT NULL`. The most-nominated `target_item_id` wins (majority vote across agents). If no agent specified a target, the apply fails gracefully with an error message and the item stays in the queue for manual review.
+
+### Bulk controls
+
+- **Apply All Merges** — applies every merge in the queue in sequence
+- **Dismiss All** — marks all pending decisions as dismissed without applying
+- Applied and dismissed items vanish from the queue immediately
+
+### Path to full autonomous execution
+
+Merge is fully executable today because the target is unambiguous (an item ID). Split and reclassify require richer agent output before they can auto-execute:
+
+- **Split** needs: which operation IDs go to group A vs. group B (extend agent tool-use schema with `split_spec`)
+- **Reclassify** needs: the new interval, frequency unit, or classification values (extend schema with `reclassify_spec`)
+
+Once those schema extensions are in place, the mutator gains `apply_split()` and `apply_reclassify()` — and the queue becomes fully executable without human intervention for high-confidence decisions.
+
+---
+
 *Rules engine: `engine/packager.py` + `engine/rules.py`*
 *AI review: `engine/agent_orchestrator.py` + `engine/agents/`*
+*Plan mutation: `engine/plan_mutator.py`*
