@@ -256,14 +256,27 @@ When applying a merge, the mutator queries all `AgentDecision` rows for the sour
 - **Dismiss All** — marks all pending decisions as dismissed without applying
 - Applied and dismissed items vanish from the queue immediately
 
+### Safety gates on auto-execution
+
+Not all merge recommendations are safe to auto-execute. The system enforces two hard gates:
+
+1. **Regulatory gate** — items marked `is_regulatory = True` are never auto-merged, regardless of agent consensus. Regulatory tasks must remain in dedicated plan items.
+2. **Criticality gate** — items containing A-class failure modes are never auto-merged. Their traceability and frequency must not be diluted.
+
+These gates are enforced in two places: in each agent's system prompt (agents are instructed not to recommend merge for these items) and in the Judge prompt (the Judge will output `keep` if these conditions are present, even if all specialist agents recommended merge).
+
+### Merge target resolution
+
+Agents supply a `target_item_id` (UUID) field in their structured tool-use output. The item IDs of all adjacent items and same-area route items are provided to every agent in the context block so they can copy the correct UUID verbatim. The mutator picks the most-nominated `target_item_id` across all agents that recommended merge.
+
 ### Path to full autonomous execution
 
-Merge is fully executable today because the target is unambiguous (an item ID). Split and reclassify require richer agent output before they can auto-execute:
+Merge is fully executable today. Split and reclassify require richer agent output before they can auto-execute:
 
-- **Split** needs: which operation IDs go to group A vs. group B (extend agent tool-use schema with `split_spec`)
-- **Reclassify** needs: the new interval, frequency unit, or classification values (extend schema with `reclassify_spec`)
+- **Split** — the `split_spec` field (group_a / group_b operation number arrays) is now in the `REVIEW_TOOL` schema. Once the mutator gains `apply_split()`, high-confidence split recommendations can execute automatically.
+- **Reclassify** — needs: the new interval, frequency unit, or classification values (extend schema with `reclassify_spec`)
 
-Once those schema extensions are in place, the mutator gains `apply_split()` and `apply_reclassify()` — and the queue becomes fully executable without human intervention for high-confidence decisions.
+Once those mutator methods are implemented, the queue becomes fully executable without human intervention for high-confidence decisions.
 
 ---
 
