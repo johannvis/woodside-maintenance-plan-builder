@@ -59,8 +59,9 @@ Open with this framing:
 
 1. Click **Tab 3: Review & Refine**
 2. Click **"▶ Generate Plans"** (takes 2–3 seconds)
-3. Point out the summary bar:
-   - **270 plans** | **856 items** | **856 task lists** | **1,000 operations**
+3. Point out the summary bar — with default rules expect roughly:
+   - **~270 plans** | **~856 items** | **~856 task lists** | **1,000 operations**
+   - *(exact numbers vary slightly by rule settings)*
 
 ### Plan View (default)
 
@@ -76,14 +77,21 @@ Open with this framing:
 
 ### Pending Agent Actions queue (after AI Review)
 
-If AI Review has been run, a **"🤖 Pending Agent Actions"** panel appears at the top of Plan View showing every non-keep recommendation awaiting action:
+If AI Review has been run, a **"🤖 Pending Agent Actions"** panel appears at the top of Plan View showing every non-keep recommendation awaiting action.
 
-- **🔗 Merge** items have a **✓ Apply** button — one click moves all operations to the agent-nominated target, re-numbers them, and updates durations. No manual intervention needed.
-- **✂️ Split** and **🏷️ Reclassify** items have a **🔍 Review** button — jumps directly to that item in the plan tree so the planner can inspect and act.
-- **✕ Dismiss** removes any item from the queue without applying it.
-- **Apply All Merges** and **Dismiss All** bulk controls for processing the full queue quickly.
+Each row shows three things — point these out explicitly:
 
-*This is the human-in-the-loop approval gate: agents recommend, planner approves.*
+1. **Agent vote breakdown** — which agents voted for what, e.g. `💰🗺️ → merge  🔒🔩 → keep`. The planner can see at a glance whether it was a strong consensus or a split decision.
+2. **Merge target name** — `→ into: <target item description>` so the planner knows exactly where the operations will land *before* clicking Apply.
+3. **Judge rationale** — one-line explanation of why the final decision was made.
+
+Then the action buttons:
+- **🔗 Merge** → **✓ Apply** — one click moves all operations to the nominated target, re-numbers them, updates durations. Fully automated.
+- **✂️ Split** and **🏷️ Reclassify** → **🔍 Review** — jumps directly to that item in the plan tree for manual action.
+- **✕ Dismiss** — removes from queue without applying.
+- **✓ Apply All Merges** and **Dismiss All** — bulk controls for processing the full queue.
+
+*This is the human-in-the-loop approval gate: agents recommend with full transparency, planner approves with one click.*
 
 ### Equipment View
 
