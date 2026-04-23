@@ -143,6 +143,56 @@ The **⚖️ Judge** is invoked only when agents disagree. It applies configurab
 
 ---
 
+## Guided Walk-Through: Agent Review → Merge Execution (on sample data)
+
+This is the highest-impact sequence to run on the LNG Train sample. It demonstrates the full advisor → executor loop in under 3 minutes.
+
+### Setup (do this before the demo)
+
+Use these rule settings to generate a plan structure that produces interesting agent recommendations:
+- **Primary Grouping:** Sub-system (Level 3) — default, keep as-is
+- **Max Duration Cap:** 8 hrs — default
+- All other rules: defaults
+
+This produces ~856 plan items from 1,000 tasks. Because tasks are grouped at the equipment level, the **Feed Gas Compression** system (C01, 246 tasks) ends up with many small single-operation items — exactly the pattern the Cost and Route agents are designed to flag.
+
+### The specific path to follow
+
+**1. Load & package**
+- Tab 1 → **Load LNG Train Sample** → confirm 1,000 tasks / 125 FLOCs
+- Tab 3 → **▶ Generate Plans** → confirm ~856 items
+
+**2. Run a focused AI Review**
+- Tab 4 → set **Max items to review** to **30** (saves time and API cost for the demo)
+- Click **▶ Run AI Review** — watch the streaming feed
+- After completion, note the Merged count — with the default rules producing many single-op items, expect several merge recommendations
+
+**3. Go to the Pending Actions queue**
+- Switch to **Tab 3 → Plan View**
+- The **🤖 Pending Agent Actions** panel appears at the top
+- Find a **🔗 MERGE** row — look for one in the **Feed Gas Compression** area (C01), MECH-ROT trade, 12-monthly interval
+
+**4. Read the queue row — point out three things**
+- The **agent vote summary** (e.g. `💰🗺️ → merge  🔒🔩 → keep`) — shows which agents agreed and which dissented
+- The **merge target** line (`→ into: <target item name>`) — exactly where the operations will land
+- The **rationale snippet** — the Judge's one-line explanation
+
+**5. Apply the merge**
+- Click **✓ Apply** on one row — watch the success toast: `"Merged: 2 ops → <target item>"`
+- Or click **✓ Apply All N Merge Recommendations** to execute the whole queue at once
+- The row disappears from the queue; the source item is now empty
+
+**6. Verify the result**
+- Find the target item in the plan tree (use the name from the merge target line)
+- Click it — the Operations list now shows the combined set, re-numbered (010, 020, 030…)
+- The Duration bar reflects the updated total
+
+### Why this sequence lands
+
+> *"The rules engine did its job — it packaged 1,000 tasks in 3 seconds following the client's rules. Then six AI agents reviewed the output from different perspectives. The Route agent saw that a mechanical technician would need three separate trips to the same compressor area for three separate plan items — all same trade, same interval, same physical location. The Cost agent flagged the same items as inefficient overhead. Four of six agents agreed: merge. One click executed it. That's the 40-contractor deliberation, automated."*
+
+---
+
 ## Step 5 — Export (2 minutes)
 
 1. Click **Tab 5: Export**
