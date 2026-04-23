@@ -299,14 +299,15 @@ def _review_item(session, item: MaintenancePlanItem, specialist_agents: list,
         )
         session.add(ad)
 
+    # Always write a JudgeDecision for non-keep actions so the pending queue
+    # can surface them — even when the result came from agent consensus
+    # (no judge invoked) rather than arbitration.
+    input_scores = {d["agent_role"]: d.get("score", 0) for d in decisions}
     if judge_result:
         winning_role = judge_result.get("winning_agent", "")
         winning_profile = agent_profile_map.get(winning_role)
-        # Also check judge profile
         if not winning_profile and judge_agent:
             winning_profile = judge_agent.profile if winning_role == "judge" else None
-
-        input_scores = {d["agent_role"]: d.get("score", 0) for d in decisions}
         jd = JudgeDecision(
             session_id=session_id,
             maintenance_plan_item_id=item.id,
@@ -314,7 +315,24 @@ def _review_item(session, item: MaintenancePlanItem, specialist_agents: list,
             final_action=final_action,
             judge_rationale=judge_result.get("judge_rationale", ""),
             input_scores=json.dumps(input_scores),
-            modified=judge_result.get("modified", False),
+            modified=False,
+        )
+        session.add(jd)
+    elif final_action != "keep":
+        # Consensus non-keep decision — write a JudgeDecision so it appears in the queue
+        agreeing = [d for d in decisions if d.get("recommended_action") == final_action]
+        rationale = (
+            f"Consensus ({top_count}/6 agents agreed: {final_action}). "
+            + (agreeing[0].get("rationale", "") if agreeing else "")
+        )
+        jd = JudgeDecision(
+            session_id=session_id,
+            maintenance_plan_item_id=item.id,
+            winning_agent_id=None,
+            final_action=final_action,
+            judge_rationale=rationale[:500],
+            input_scores=json.dumps(input_scores),
+            modified=False,
         )
         session.add(jd)
 
