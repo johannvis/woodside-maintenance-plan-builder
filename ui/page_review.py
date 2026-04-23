@@ -1,7 +1,7 @@
 """Step 3: Review & Refine."""
 
 import os
-from collections import defaultdict
+from collections import defaultdict, Counter
 
 import pandas as pd
 import streamlit as st
@@ -12,6 +12,14 @@ from db.models import (
     AgentDecision, JudgeDecision, AgentProfile,
 )
 from engine.packager import package
+from engine.plan_mutator import apply_merge, dismiss_decision
+
+_ACTION_EMOJI = {"keep": "✅", "split": "✂️", "merge": "🔗", "reclassify": "🏷️"}
+_ACTION_COLOUR = {"split": "#e74c3c", "merge": "#3498db", "reclassify": "#f39c12", "keep": "#2ecc71"}
+_ROLE_ICONS = {
+    "safety": "🔒", "cost": "💰", "efficiency": "⚡",
+    "integrity": "🔩", "coverage": "📋", "route": "🗺️",
+}
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -145,17 +153,14 @@ def _render_agent_review_section(agent_data: dict) -> None:
     decisions = agent_data["decisions"]
     judge = agent_data["judge"]
 
-    ROLE_ICONS = {"safety": "🔒", "cost": "💰", "efficiency": "⚡", "integrity": "🔩"}
-    ACTION_COLOURS = {"keep": "#2ecc71", "split": "#e74c3c", "merge": "#3498db", "reclassify": "#f39c12"}
-
     with st.expander("🤖 Agent Review", expanded=True):
         for d in decisions:
             role = d.agent_profile.role if d.agent_profile else "unknown"
-            icon = ROLE_ICONS.get(role, "🔬")
+            icon = _ROLE_ICONS.get(role, "🔬")
             score = d.score or 0
             pct = min(score / 10 * 100, 100)
             bar_colour = "#2ecc71" if score >= 7 else "#f39c12" if score >= 4 else "#e74c3c"
-            action_colour = ACTION_COLOURS.get(d.recommended_action, "#888")
+            action_colour = _ACTION_COLOUR.get(d.recommended_action, "#888")
 
             st.markdown(
                 f"""<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
@@ -174,7 +179,7 @@ def _render_agent_review_section(agent_data: dict) -> None:
 
         if judge:
             st.divider()
-            action_colour = ACTION_COLOURS.get(judge.final_action, "#888")
+            action_colour = _ACTION_COLOUR.get(judge.final_action, "#888")
             winning = ""
             if judge.winning_agent:
                 winning = f" — driven by **{judge.winning_agent.role}**"
@@ -196,7 +201,103 @@ def _render_agent_review_section(agent_data: dict) -> None:
                 st.markdown(f"🤝 **Consensus:** {top.upper()} (no judge required)")
 
 
+def _render_pending_actions(session, packaging_session_id: str) -> None:
+    """Pending agent actions queue — shown at top of Plan View when actions exist."""
+    pending = (
+        session.query(JudgeDecision, MaintenancePlanItem)
+        .join(MaintenancePlanItem, JudgeDecision.maintenance_plan_item_id == MaintenancePlanItem.id)
+        .filter(
+            JudgeDecision.session_id == packaging_session_id,
+            JudgeDecision.final_action != "keep",
+            JudgeDecision.modified == False,
+        )
+        .order_by(JudgeDecision.final_action)
+        .all()
+    )
+
+    if not pending:
+        return
+
+    action_counts = Counter(jd.final_action for jd, _ in pending)
+    badges = " · ".join(
+        f"{_ACTION_EMOJI.get(a, '?')} {a.capitalize()}: **{n}**"
+        for a, n in sorted(action_counts.items())
+    )
+
+    with st.expander(
+        f"🤖 Pending Agent Actions — {len(pending)} items waiting  |  {badges}",
+        expanded=True,
+    ):
+        # Bulk apply merges
+        merges = [(jd, item) for jd, item in pending if jd.final_action == "merge"]
+        col_bulk, col_dismiss_all = st.columns([2, 1])
+        with col_bulk:
+            if merges and st.button(
+                f"✓ Apply All {len(merges)} Merge Recommendations",
+                type="primary",
+                use_container_width=True,
+            ):
+                applied = sum(1 for jd, _ in merges if apply_merge(session, jd.id)["ok"])
+                st.success(f"Applied {applied} of {len(merges)} merges.")
+                st.rerun()
+        with col_dismiss_all:
+            if st.button("✕ Dismiss All", use_container_width=True):
+                for jd, _ in pending:
+                    dismiss_decision(session, jd.id)
+                st.rerun()
+
+        st.divider()
+
+        for jd, item in pending:
+            action = jd.final_action
+            colour = _ACTION_COLOUR.get(action, "#888")
+            emoji = _ACTION_EMOJI.get(action, "?")
+            desc = (item.description or item.id[:12])[:60]
+            rationale = (jd.judge_rationale or "—")[:160]
+
+            c_act, c_desc, c_rat, c_btns = st.columns([1, 2, 3, 2])
+
+            with c_act:
+                st.markdown(
+                    f'<div style="margin-top:4px;">{emoji} '
+                    f'<span style="font-weight:700;color:{colour};">{action.upper()}</span></div>',
+                    unsafe_allow_html=True,
+                )
+            with c_desc:
+                item_badges = []
+                if item.is_regulatory:
+                    item_badges.append("🔴")
+                if not item.is_online:
+                    item_badges.append("🔒")
+                item_badges.append(f"⏱️ {item.frequency}{item.frequency_unit[0] if item.frequency_unit else ''}")
+                st.markdown(f"**{desc}**  " + " ".join(item_badges))
+            with c_rat:
+                st.caption(rationale)
+            with c_btns:
+                b1, b2 = st.columns(2)
+                with b1:
+                    if action == "merge":
+                        if st.button("✓ Apply", key=f"apply_{jd.id}", type="primary", use_container_width=True):
+                            result = apply_merge(session, jd.id)
+                            if result["ok"]:
+                                st.success(f"Merged: {result['ops_moved']} ops → {result['target'][:25]}")
+                                st.rerun()
+                            else:
+                                st.error(result["error"])
+                    else:
+                        if st.button("🔍 Review", key=f"review_{jd.id}", use_container_width=True,
+                                     help="Jump to this item in the plan tree"):
+                            st.session_state["selected_item_id"] = jd.maintenance_plan_item_id
+                            st.rerun()
+                with b2:
+                    if st.button("✕", key=f"dismiss_{jd.id}", use_container_width=True, help="Dismiss"):
+                        dismiss_decision(session, jd.id)
+                        st.rerun()
+
+
 def _render_plan_view(session, packaging_session_id: str, plans: list):
+    _render_pending_actions(session, packaging_session_id)
+
     col_tree, col_detail = st.columns([2, 3])
 
     # Load AI-reviewed item IDs once
